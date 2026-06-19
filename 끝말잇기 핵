@@ -21,32 +21,11 @@ if _cg:FindFirstChild("CustomWordFinderGui") then
     _cg["CustomWordFinderGui"]:Destroy() 
 end
 
-local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-local function base64_decode(data)
-    data = string.gsub(data, '[^'..b..'=]', '')
-    return (data:gsub('.', function(x)
-        if (x == '=') then return '' end
-        local r,f='',(b:find(x)-1)
-        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
-        return r;
-    end):gsub('%d%d%d%d%d%d%d%d', function(x)
-        local c=0
-        for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end
-        return string.char(c)
-    end))
-end
+local WordDB = {
+    "두듥", "두렫", "켓등", "다기능워크스테이션", "류턴블폼튬", "도린꼍", "뎌춍", "됴셕", "라선형턴넬", "라렐", "디스프로슘", "디지털컴퓨퍼시뮬레이션", "등졍", "등뎨", "구냬", "구듫", "그늫", "나준녘", "노르넨", "노붐오르가늄", "니맣", "등츩", "등쨈", "뎌젹", "고쇠믓", "산슳", "가래틋", "시틋", "님잫", "벳꽃", "귀틤", "름육", "다툼", "다쁘", "믈집", "름호", "가시섶", "뎡강모디", "꾼둑꾼둑", "둑슨", "슨몽", "몽생미셸", "셸륵", "락톤", "쌀꿰꼿", "긧고", "귓발", "긔딪", "슷바닥", "믜신것", "늡렬", "늡늡", "귿곻", "남긧버슷", "톄언문", "롱어", "즘즉", "다름뮤타튬", "나이오븀", "로듐", "레늄", "엇비슷", "낭자", "장징궈", "스트론튬", "벳살", "당구솣", "뎡그당", "피토크로뮴", "가슝", "나랗", "가듁", "듁순", "늬굽", "듸레", "쨔다", "장구매듭", "시긔", "읏듬", "지르코늄", "욹은불근", "낏내", "욹다", "시욹", "차마륨", "차풰", "왕듸", "믈라카", "살갗", "차이쨔", "윕쌀", "냥쭝", "내뎡", "긿다", "프랑슘", "곰븨님븨", "가린긿", "다른", "역스윕", "돌꿴", "인듐", "옌청", "름연", "마긶", "자이로파일럿", "식물무늬", "방틀무늬", "방듸", "븨피", "전녆", "대숳", "믈뎜", "이렁셩", "돌꼇", "성심성의껏", "정성껏", "다롄", "가랒", "나잇값", "선곬", "질그릇", "균핵균", "신시튬", "잎자욱", "치읓", "히읗", "피읖", "디귿", "치마긶", "늣치", "늣하르방", "봇둑", "기뇰", "내곬", "사뿐", "나트륨", "다이디뮴", "표고버섯", "가측값", "대감굿", "뭄푸레", "발가울넠", "윰차", "윰라대왕", "시보귬", "기동돓", "굽굽", "자릿값", "차죵", "다박나룻", "쨔지다", "뭄바이", "트레이닝", "갸름컁컁", "겨욹", "거믜", "거먕", "고농축우라늄", "구읫잫", "션믈", "구연산철암모늄", "규산마그네슘", "규산알루미늄", "그릇그릇", "그듸", "그랑기뇰", "너븨", "노멀라이제이션", "누괵", "누드룩", "뉴메틱케이슨", "뉴페인팅", "느븨", "느른", "씀바귀", "는곱", "겍자", "슨상", "체겍", "긔쳑", "롱런", "곬섶", "체꼉", "뎨깁", "물속텔레비죤", "꽝꽝", "심껏", "는앵", "적외선텔레비죤", "내슈빌데이지슨", "되프뎧", "쌀되", "죤득죤득", "툼벙툼벙", "곡뒿", "믈구븨", "구듮곬",
+    "양녬", "꿍꿍", "똠양꿍", "지름똠", "정도껏", "굠쌀", "테르븀", "질쭘질쭘", "쁘라띠그라하니까", "까드랑낫", "작수뽐쁘", "살쟉", "쟉쟉"
+}
 
-local _RawBase64Chunk = "65GQ65OlIOuRkOugqyDsvJPrk7Eg64uk6riw64ql7JuM7YGs7Iqk7YWM7J207IWYIOulmO2EtOu4lO2PvO2KrCDrj4TrprDqvI0g646M7LaNIOuQtOyFlSDrnbzshKDtmJXthLTrhKwg652866CQIOuUlOyKpO2UhOuhnOyKmCDrlJTsp4DthLjsu7Ttk6jtjbzsi5zrrqzroIjsnbTshZgg65Ox7KGNIOuTseuOqCDqtazrg6wg6rWs65OrIOq3uOuKqyDrgpjspIDrhZgg64W466W064SoIOuFuOu2kOyYpOultOqwgOuKhCDri4jrp6Mg65Ox7LipIOuTseyoiCDrjozsoLkg6rOg7Ieg66+TIOyCsOyKsyDqsIDrnpjti4sg7Iuc7YuLIOuLmOyeqyDrsrPqvYMg6reA7YukIOumhOycoSDri6TtiLwg64uk7IGYIOuviOynkSDrpoTtmLgg6rCA7Iuc7IS2IOuOoeqwleuqqOuUlCDqvrzrkZHqvrzrkZEg65GR7IqoIOyKqOuqvSDrqr3sg53rr7jshbgg7IW466W1IOudve2GpCDsjIDqv7DqvL8g6rin6rOgIOq3k+uwnCDquJTrlKog7Iq367CU64ulIOuvnOyLoOqygyDriqHroKwg64qh64qhIOq3v+qzuyDrgqjquKfrsoTsircg7YaE7Ja466y4IOuhseyWtCDsppjspokg64uk66aE666k7YOA7YqsIOuCmOydtOyYpOu4gCDroZzrk5Ag66CI64qEIOyXh+u5hOyKtyDrgq3snpAg7J6l7KeV6raIIOyKpO2KuOuhoO2KrCDrsrPsgrQg64u56rWs7IajIOuOoeq3uOuLuSDtlLzthqDtgazroZzrrrQg6rCA7IqdIOuCmOuelyDqsIDrk4Eg65OB7IicIOuKrOq1vSDrk7jroIgg7KiU64ukIOyepeq1rOunpOuTrSDsi5zquJQg7J2P65OsIOyngOultOy9lOuKhCDsmrnsnYDrtojqt7wg64KP64K0IOyaueuLpCDsi5zsmrkg7LCo66eI66WoIOywqO2SsCDsmZXrk7gg66+I65287Lm0IOyCtOqwlyDssKjsnbTsqJQg7JyV7IyAIOuDpeytnSDrgrTrjqEg6ri/64ukIO2UhOuekeyKmCDqs7DruKjri5jruKgg6rCA66aw6ri/IOuLpOuluCDsl63siqTsnJUg64+M6r+0IOyduOuTkCDsmIzssq0g66aE7JewIOuniOq4tiDsnpDsnbTroZztjIzsnbzrn78g7Iud66y866y064qsIOuwqe2LgOustOuKrCDrsKnrk7gg67io7ZS8IOyghOuFhiDrjIDsiLMg66+I646cIOydtOuggeyFqSDrj4zqvIcg7ISx7Ius7ISx7J2Y6ruPIOygleyEseq7jyDri6TroYQg6rCA656SIOuCmOyeh+qwkiDshKDqs6wg7KeI6re466aHIOq3oO2Vteq3oCDsi6Dsi5ztiqwg7J6O7J6Q7JqxIOy5mOydkyDtnojsnZcg7ZS87J2WIOuUlOq3vyDsuZjrp4jquLYg64qj7LmYIOuKo+2VmOultOuwqSDrtIfrkZEg6riw64ewIOuCtOqzrCDsgqzrv5Ag64KY7Yq466WoIOuLpOydtOuUlOuutCDtkZzqs6DrsoTshK8g6rCA7Lih6rCSIOuMgOqwkOq1vyDrrYTtkbjroIgg67Cc6rCA7Jq464SgIOycsOywqCDsnLDrnbzrjIDsmZUg7Iuc67O06resIOq4sOuPmeuPkyDqtb3qtb0g7J6Q66a/6rCSIOywqOyjtSDri6TrsJXrgpjro7sg7KiU7KeA64ukIOuthOuwlOydtCDtirjroIjsnbTri50g6rC466aE7LuB7LuBIOqyqOyauSDqsbDrr5wg6rGw66iVIOqzoOuGjey2leyasOudvOuKhCDqtazsnavsnqsg7IWY66+IIOq1rOyXsOyCsOyyoOyVlOuqqOuKhCDqt5zsgrDrp4jqt7jrhKTsipgg6rec7IKw7JWM66Oo66+464qEIOq3uOumh+q3uOumhyDqt7jrk7gg6re4656R6riw64ewIOuEiOu4qCDrhbjrqYDrnbzsnbTsoJzsnbTshZgg64iE6rS1IOuIhOuTnOujqSDribTrqZTti7HsvIDsnbTsiqgg64m07Y6Y7J247YyFIOuKkOu4qCDripDrpbgg7JSA67CU6reAIOuKlOqzsSDqso3snpAg7Iqo7IOBIOyytOqyjSDquJTss5Eg66Gx65+wIOqzrOyEtiDssrTqvIkg646o6rmBIOusvOyGje2FlOugiOu5hOyjpCDqvZ3qvZ0g7Ius6ruPIOuKlOyVtSDsoIHsmbjshKDthZTroIjruYTso6Qg64K07IqI67mM642w7J207KeA7IqoIOuQmO2UhOuOpyDsjIDrkJgg7KOk65Od7KOk65OdIO2IvOuyme2IvOuymSDqs6Hrkr8g66+I6rWs67ioIOq1rOuTruqzrCDslpHrhawg6r+N6r+NIOuYoOyWkeq/jSDsp4DrpoTrmKAg7KCV64+E6ruPIO2FjOultOu4gCDqtaDsjIAg7KeI7K2Y7KeI7K2YIOyBmOudvOudoOq3uOudvO2VmOuLiOq5jCDquYzrk5zrnpHrgqsg7J6R7IiYIOu9kOyBmCDsgrTsn4kg7J+J7J+J
-local WordDB = {}
-local seen = {}
-local decoded_raw = base64_decode(_RawBase64Chunk)
-
-for word in string.gmatch(decoded_raw, '[^",%s]+') do
-    if not seen[word] then
-        seen[word] = _T
-        table.insert(WordDB, word)
-    end
-end
 table.sort(WordDB)
 
 local function getCompatibleChars(char)
