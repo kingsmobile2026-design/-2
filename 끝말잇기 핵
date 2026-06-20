@@ -1,9 +1,9 @@
-local _lp = game:GetService("Players").LocalPlayer
+local _lp = game.Players.LocalPlayer
 local _cg = nil
 if gethui then 
     _cg = gethui() 
 else 
-    _cg = _lp:FindFirstChildOfClass("PlayerGui") or _lp.PlayerGui
+    _cg = _lp:WaitForChild("PlayerGui", 5) or _lp.PlayerGui
 end
 
 local _T = not not (1 == 1)
@@ -21,11 +21,6 @@ end
 if _cg:FindFirstChild("CustomWordFinderGui") then 
     _cg["CustomWordFinderGui"]:Destroy() 
 end
-
-local _rmt = nil
-pcall(function()
-    _rmt = game:GetService("ReplicatedStorage"):WaitForChild("Remotes", 5):WaitForChild("SubmitWord", 5)
-end)
 
 local WordDB = {
     "두듥", "두렫", "켓등", "다기능워크스테이션", "류턴블폼튬", "도린꼍", "뎌춍", "됴셕", "라선형턴넬", "라렐", "디스프로슘", "디지털컴퓨퍼시뮬레이션", "등졍", "등뎨", "구냬", "구듫", "그늫", "나준녘", "노르넨", "노붐오르가늄", "니맣", "등츩", "등쨈", "뎌져", "고쇠믓", "산슳", "가래틋", "시틋", "님잫", "벳꽃", "귀틤", "름육", "다툼", "다쁘", "믈집", "름호", "가시섶", "뎡강모디", "꾼둑꾼둑", "둑슨", "슨몽", "몽생미셸", "셸륵", "락톤", "쌀꿰꼿", "긧고", "귓발", "긔딪", "슷바닥", "믜신것", "늡렬", "늡늡", "귿곻", "남긧버슷", "톄언문", "롱어", "즘즉", "다름뮤타튬", "나이오븀", "로듐", "레늄", "엇비슷", "낭자", "장징궈", "스트론튬", "벳살", "당구솣", "뎡그당", "피토크로뮴", "가슝", "나랗", "가듁", "듁순", "늬굽", "듸레", "쨔다", "장구매듭", "시긔", "읏듬", "지르코늄", "욹은불근", "낏내", "욹다", "시욹", "차마륨", "차풰", "왕듸", "믈라카", "살갗", "차이쨔", "윕쌀", "냥쭝", "내뎡", "긿다", "프랑슘", "곰븨님븨", "가린긿", "다른", "역스윕", "돌꿴", "인듐", "옌청", "름연", "마긶", "자이로파일럿", "식물무늬", "방틀무늬", "방듸", "븨피", "전녆", "대숳", "믈뎜", "이렁셩", "돌꼇", "성심성의껏", "정성껏", "다롄", "가랒", "나잇값", "선곬", "질그릇", "균핵균", "신시튬", "잎자욱", "치읓", "히읗", "피읖", "디귿", "치마긶", "늣치", "늣하르방", "봇둑", "기뇰", "내곬", "사뿐", "나트륨", "다이디뮴", "표고버섯", "가측값", "대감굿", "뭄푸레", "발가울넠", "윰차", "윰라대왕", "시보귬", "기동돓", "굽굽", "자릿값", "차죵", "다박나룻", "쨔지다", "뭄바이", "트레이닝", "갸름컁컁", "겨욹", "거믜", "거먕", "고농축우라늄", "구읫잫", "구연산철암모늄", "규산마그네슘", "규산알루미늄", "그릇그릇", "그듸", "그랑기뇰", "너븨", "노멀라이제이션", "누괵", "누드룩", "뉴메틱케이슨", "뉴페인팅", "느븨", "느른", "씀바귀", "는곱", "겍자", "슨상", "체겍", "긔쳑", "롱런", "곬섶", "체꼉", "뎨깁", "물속텔레비죤", "꽝꽝", "심껏", "는앵", "적외선텔레비죤", "내슈빌데이지슨", "되프뎧", "쌀되", "죤득죤득", "툼벙툼벙", "곡뒿", "믈구븨", "구듮곬",
@@ -49,19 +44,51 @@ local function getCompatibleChars(char)
     return map[char] or {char}
 end
 
-local gui = Instance.new("ScreenGui")
+local gui = Instance.new("ScreenGui", _cg)
 gui.Name = "CustomWordFinderGui"
 gui.ResetOnSpawn = false
 
-local frame = Instance.new("Frame")
+local loadLabel = Instance.new("TextLabel", gui)
+loadLabel.Size = UDim2.new(0, 200, 0, 50)
+loadLabel.Position = UDim2.new(0.5, -100, 0.5, -25)
+loadLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+loadLabel.Text = "Loading... (로딩 중...)"
+loadLabel.TextColor3 = Color3.fromRGB(255, 150, 50)
+loadLabel.Font = Enum.Font.SourceSansBold
+loadLabel.TextSize = 18
+Instance.new("UICorner", loadLabel).CornerRadius = UDim.new(0, 6)
+
+local frame = Instance.new("Frame", gui)
 frame.Size = UDim2.new(0, 340, 0, 360)
 frame.Position = UDim2.new(0.5, -170, 0.4, -180)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 frame.Active = _T
+frame.Visible = false
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-frame.Parent = gui
 
-local title = Instance.new("TextButton")
+local toggleBtn = Instance.new("TextButton", gui)
+toggleBtn.Size = UDim2.new(0, 80, 0, 35)
+toggleBtn.Position = UDim2.new(0, 10, 0.5, -17)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+toggleBtn.Text = "단어장 ON"
+toggleBtn.TextColor3 = Color3.new(1, 1, 1)
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.TextSize = 14
+toggleBtn.Visible = false
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 6)
+
+toggleBtn.MouseButton1Click:Connect(function()
+    frame.Visible = not frame.Visible
+    if frame.Visible then
+        toggleBtn.Text = "단어장 OFF"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
+    else
+        toggleBtn.Text = "단어장 ON"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    end
+end)
+
+local title = Instance.new("TextButton", frame)
 title.Size = UDim2.new(1, 0, 0, 35)
 title.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
 title.Text = "  끝말잇기 통합 검색기 (" .. #WordDB .. "개)"
@@ -70,7 +97,6 @@ title.Font = Enum.Font.SourceSansBold
 title.TextSize = 14
 title.TextXAlignment = Enum.TextXAlignment.Left
 Instance.new("UICorner", title)
-title.Parent = frame
 
 local dragging = false
 local dragInput, dragStart, startPos
@@ -94,7 +120,7 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
     end
 end)
 
-local searchBox = Instance.new("TextBox")
+local searchBox = Instance.new("TextBox", frame)
 searchBox.Size = UDim2.new(1, -30, 0, 35)
 searchBox.Position = UDim2.new(0, 15, 0, 50)
 searchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
@@ -105,25 +131,33 @@ searchBox.Font = Enum.Font.SourceSans
 searchBox.TextSize = 14
 searchBox.ClearTextOnFocus = false
 Instance.new("UICorner", searchBox)
-searchBox.Parent = frame
 
-local scroll = Instance.new("ScrollingFrame")
+local scroll = Instance.new("ScrollingFrame", frame)
 scroll.Size = UDim2.new(1, -30, 1, -110)
 scroll.Position = UDim2.new(0, 15, 0, 100)
 scroll.BackgroundTransparency = 1
 scroll.ScrollBarThickness = 4
-scroll.Parent = frame
 
-local layout = Instance.new("UIListLayout")
+local layout = Instance.new("UIListLayout", scroll)
 layout.Padding = UDim.new(0, 4)
-layout.Parent = scroll
+
+local function findGameTextBox()
+    local pGui = _lp:FindFirstChildOfClass("PlayerGui")
+    if not pGui then return nil end
+    for _, v in ipairs(pGui:GetDescendants()) do
+        if v:IsA("TextBox") and v.Parent and v.Parent.Name == "TypeFrame" then
+            return v
+        end
+    end
+    return nil
+end
 
 local function updateView(list)
     for _, c in ipairs(scroll:GetChildren()) do
         if c:IsA("TextButton") then c:Destroy() end
     end
     for _, word in ipairs(list) do
-        local lbl = Instance.new("TextButton")
+        local lbl = Instance.new("TextButton", scroll)
         lbl.Size = UDim2.new(1, -5, 0, 28)
         lbl.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
         lbl.Text = "  " .. word
@@ -132,11 +166,14 @@ local function updateView(list)
         lbl.TextSize = 14
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         Instance.new("UICorner", lbl)
-        lbl.Parent = scroll
 
         lbl.MouseButton1Click:Connect(function()
-            if _rmt then
-                pcall(function() _rmt:FireServer(word) end)
+            local targetBox = findGameTextBox()
+            if targetBox then
+                pcall(function()
+                    targetBox.Text = word
+                    targetBox:CaptureFocus()
+                end)
             end
         end)
     end
@@ -165,8 +202,15 @@ local function doSearch()
 end
 
 searchBox:GetPropertyChangedSignal("Text"):Connect(doSearch)
-gui.Parent = _cg
 updateView(WordDB)
+
+task.delay(1.5, function()
+    loadLabel:Destroy()
+    frame.Visible = true
+    toggleBtn.Visible = true
+    toggleBtn.Text = "단어장 OFF"
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
+end)
 
 local _lt = ""
 
@@ -184,9 +228,8 @@ end
 task.spawn(function()
     while task.wait(0.3) do
         local targetLabel = findSpectatorLabel()
-        
         if not targetLabel then
-            title.Text = " 🔍 중앙 제시어 UI 탐색 중..."
+            if frame.Visible then title.Text = " 🔍 중앙 제시어 UI 탐색 중..." end
             continue
         end
 
@@ -205,9 +248,9 @@ task.spawn(function()
 
         if ch and ch ~= "" and ch ~= _lt and utf8.len(ch) == 1 then
             _lt = ch
-            title.Text = " ⚡ 실시간 실시간 매칭 글자: '" .. ch .. "'"
+            if frame.Visible then title.Text = " ⚡ 실시간 매칭 글자: '" .. ch .. "'" end
             searchBox.Text = ch
-        elseif text == "" or not ch then
+        elseif (text == "" or not ch) and frame.Visible then
             title.Text = " ⏳ 게임 대기 중 / 글자 인식 대기"
         end
     end
