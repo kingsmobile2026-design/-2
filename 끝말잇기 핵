@@ -176,7 +176,6 @@ local function updateView(list)
                     task.wait(0.02)
                     targetBox.Text = word
                     
-                    -- 의도적인 글자 입력 신호 발생 및 시스템 동기화 대기
                     local oldText = targetBox.Text
                     targetBox.Text = oldText .. " "
                     targetBox.Text = oldText
