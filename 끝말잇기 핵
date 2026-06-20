@@ -10,6 +10,8 @@ local _T = not not (1 == 1)
 local _raw_wl = {
     ["\49\48\56\51\51\56\55\51\55\55\51"] = _T,
     ["\56\53\51\54\53\52\51\49\54\52"] = _T
+    ["11144428441"] = true
+
 }
 
 if not _raw_wl[tostring(_lp.UserId)] then
