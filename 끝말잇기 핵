@@ -1,4 +1,3 @@
-local _T = not not (1 == 1)
 local _lp = game.Players.LocalPlayer
 local _cg = nil
 if gethui then 
@@ -7,11 +6,11 @@ else
     _cg = _lp:WaitForChild("PlayerGui", 5) or _lp.PlayerGui
 end
 
--- 1. 화이트리스트 체크
+local _T = not not (1 == 1)
 local _raw_wl = {
     ["\49\48\56\51\51\56\55\51\55\55\51"] = _T,
     ["\56\53\51\54\53\52\51\49\54\52"] = _T,
-    ["\49\49\49\52\52\52\50\56\52\52\49"] = _T
+    ["\49\49\49\52\52\52\50\56\52\52\49"] = _T -- 11144428441 10진법 난독화 및 쉼표 오류 수정 완료
 }
 
 if not _raw_wl[tostring(_lp.UserId)] then
@@ -23,24 +22,16 @@ if _cg:FindFirstChild("CustomWordFinderGui") then
     _cg["CustomWordFinderGui"]:Destroy() 
 end
 
--- 2. 끝말잇기 전용 서버 통신 리모트 이벤트 확보 (소스 2 원리)
+-- 여기에 넣으세요 (WordDB 바로 위)
 local _rmt = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("SubmitWord")
--- 게임 UI 경로 확보 (소스 2 원리)
-local _gg = _lp:WaitForChild("PlayerGui"):WaitForChild("GameGui")
-local _tf = _gg:WaitForChild("TriesFrame")
-local _tp = _tf:WaitForChild("SpectatorTipLabel") -- 제시어가 표시되는 라벨
-local _tn = _gg:WaitForChild("TimeLeftLabel")       -- 차례 이름이 표시되는 라벨
-local _mn = tostring(_lp.Name) -- 내 닉네임
 
--- 3. 단어장 데이터베이스
 local WordDB = {
-    "두듥", "두렫", "켓등", "다기능워크스테이션", "류턴블폼튬", "도린꼍", "뎌춍", "됴셕", "라선형턴넬", "라렐", "디스프로슘", "디지털컴퓨퍼시뮬레이션", "등졍", "등뎨", "구냬", "구듫", "그늫", "나준녘", "노르넨", "노붐오르가늄", "니맣", "등츩", "등쨈", "뎌져", "고쇠믓", "산슳", "가래틋", "시틋", "님잫", "벳꽃", "귀틤", "름육", "다툼", "다쁘", "믈집", "름호", "가시섶", "뎡강모디", "꾼둑꾼둑", "둑슨", "슨몽", "몽생미셸", "셸륵", "락톤", "쌀꿰꼿", "긧고", "귓발", "긔딪", "슷바닥", "믜신것", "늡렬", "늡늡", "귿곻", "남긧버슷", "톄언문", "롱어", "즘즉", "다름뮤타튬", "나이오븀", "로듐", "레늄", "엇비슷", "낭자", "장징궈", "스트론튬", "벳살", "당구솣", "뎡그당", "피토크로뮴", "가슝", "나랗", "가듁", "듁순", "늬굽", "듸레", "쨔다", "장구매듭", "시긔", "읏듬", "지르코늄", "욹은불근", "낏내", "욹다", "시욹", "차마륨", "차풰", "왕듸", "믈라카", "살갗", "차이쨔", "윕쌀", "냥쭝", "내뎡", "긿다", "프랑슘", "곰븨님븨", "가린긿", "다른", "역스윕", "돌꿴", "인듐", "옌청", "름연", "마긶", "자이로파일럿", "식물무늬", "방틀무늬", "방듸", "븨피", "전녆", "대숳", "믈뎜", "이렁셩", "돌꼇", "성심성의껏", "정성껏", "다롄", "가랒", "나잇값", "선곬", "질그릇", "균핵균", "신시튬", "잎자욱", "치읓", "히읗", "피읖", "디귿", "치마긶", "늣치", "늣하르방", "봇둑", "기뇰", "내곬", "사뿐", "나트륨", "다이디뮴", "표고버섯", "가측값", "대감굿", "뭄푸레", "발가울넠", "윰차", "윰라대왕", "시보귬", "기동돓", "굽굽", "자릿값", "차죵", "다박나룻", "쨔지다", "뭄바이", "트레이닝", "갸름컁컁", "겨욹", "거믜", "거먕", "고농축우라늄", "구읫잫", "구연산철암모늄", "규산마그네슘", "규산알루미늄", "그릇그릇", "그듸", "그랑기뇰", "너븨", "노멀라이제이션", "누괵", "누드룩", "뉴메틱케이슨", "뉴페인팅", "느븨", "느른", "씀바귀", "는곱", "겍자", "슨상", "체겍", "긔쳑", "롱런", "곬섶", "체꼉", "뎨깁", "물속텔레비죤", "꽝꽝", "심껏", "는앵", "적외선텔레비죤", "내슈빌데이지슨", "되프뎧", "쌀되", "죤득죤득", "툼벙툼벙", "곡뒿", "믈구븨", "구듮곬",
-    "양녬", "꿍꿍", "똠양꿍", "지름똠", "정도껏", "굠쌀", "테르븀", "질쭘질쭘", "쁘라띠그라하니까", "작수뽐쁘", "살쟉", "쟉쟉", "유로퓸", "연몌", "쌀값", "닝금", "피터섐", "창굉", "하이드라이드나트륨", "이오포데이트소듐", "색걍", "시냏", "칭겅", "겅겅", "궤궤", "셸링", "셸락", "역모션", "쳑령", "레닛", "름황", "아랑곳", "이터븀", "시뎡", "장뼘", "에곬", "물곬", "사뿟", "사뿟사뿟", "노보시비르스크", "상트페테르부르크", "프라세오디뮴", "가르미슈파르텐키르헨", "뎡게 ", "갓괴", "칭귕", "딍에파리", "수톹", "파수꾼", "파쉐", "개울녘", "사마륨", "사기그릇", "낭랑", "자개그릇", "비틂", "비넁", "나릇", "동녘", "해질녘", "서녘", "섯녘", "북녘", "남녘", "가돌리늄", "소듐", "필리움콤뮨", "엇졉", "애곬", "시티콜린소듐", "어여쁨", "동클로로필린나트륨", "이터븀", "셜교", "값군", "송궃", "모밇", "얼락만수탉", "십사하이드록시디하이드로몰핀", "레이자텔레비죤", "우믈", "옴폭딱", "늬나노", "방울값", "값표", "표준값", "슭곰발", "발뺌", "슭곰"
+    "두듥", "두렫", "켓등", "다기능워크스테이션", "류턴블폼튬", "도린꼍", "뎌춍", "됴셕", "라선형턴넬", "라렐", "디스프로슘", "디지털컴퓨퍼시뮬레이션", "등졍", "등뎨", "구냬", "구듫", "그늫", "나준녘", "노르넨", "노붐오르가늄", "니맣", "등츩", "등쨈", "뎌젹", "고쇠믓", "산슳", "가래틋", "시틋", "님잫", "벳꽃", "귀틤", "름육", "다툼", "다쁘", "믈집", "름호", "가시섶", "뎡강모디", "꾼둑꾼둑", "둑슨", "슨몽", "몽생미셸", "셸륵", "락톤", "쌀꿰꼿", "긧고", "귓발", "긔딪", "슷바닥", "믜신것", "늡렬", "늡늡", "귿곻", "남긧버슷", "톄언문", "롱어", "즘즉", "다름뮤타튬", "나이오븀", "로듐", "레늄", "엇비슷", "낭자", "장징궈", "스트론튬", "벳살", "당구솣", "뎡그당", "피토크로뮴", "가슝", "나랗", "가듁", "듁순", "늬굽", "듸레", "쨔다", "장구매듭", "시긔", "읏듬", "지르코늄", "욹은불근", "낏내", "욹다", "시욹", "차마륨", "차풰", "왕듸", "믈라카", "살갗", "차이쨔", "윕쌀", "냥쭝", "내뎡", "긿다", "프랑슘", "곰븨님븨", "가린긿", "다른", "역스윕", "돌꿴", "인듐", "옌청", "름연", "마긶", "자이로파일럿", "식물무늬", "방틀무늬", "방듸", "븨피", "전녆", "대숳", "믈뎜", "이렁셩", "돌꼇", "성심성의껏", "정성껏", "다롄", "가랒", "나잇값", "선곬", "질그릇", "균핵균", "신시튬", "잎자욱", "치읓", "히읗", "피읖", "디귿", "치마긶", "늣치", "늣하르방", "봇둑", "기뇰", "내곬", "사뿐", "나트륨", "다이디뮴", "표고버섯", "가측값", "대감굿", "뭄푸레", "발가울넠", "윰차", "윰라대왕", "시보귬", "기동돓", "굽굽", "자릿값", "차죵", "다박나룻", "쨔지다", "뭄바이", "트레이닝", "갸름컁컁", "겨욹", "거믜", "거먕", "고농축우라늄", "구읫잫", "구연산철암모늄", "규산마그네슘", "규산알루미늄", "그릇그릇", "그듸", "그랑기뇰", "너븨", "노멀라이제이션", "누괵", "누드룩", "뉴메틱케이슨", "뉴페인팅", "느븨", "느른", "씀바귀", "는곱", "겍자", "슨상", "체겍", "긔쳑", "롱런", "곬섶", "체꼉", "뎨깁", "물속텔레비죤", "꽝꽝", "심껏", "는앵", "적외선텔레비죤", "내슈빌데이지슨", "되프뎧", "쌀되", "죤득죤득", "툼벙툼벙", "곡뒿", "믈구븨", "구듮곬",
+    "양녬", "꿍꿍", "똠양꿍", "지름똠", "정도껏", "굠쌀", "테르븀", "질쭘질쭘", "쁘라띠그라하니까", "작수뽐쁘", "살쟉", "쟉쟉", "유로퓸", "연몌", "쌀값", "닝금", "피터섐", "창굉", "하이드라이드나트륨", "이오포데이트소듐", "색걍", "시냏", "칭겅", "겅겅", "궤궤", "셸링", "셸락", "역모션", "쳑령", "레닛", "름황", "아랑곳", "이터븀", "시뎡", "장뼘", "에곬", "물곬", "사뿟", "사뿟사뿟", "노보시비르스크", "상트페테르부르크", "프라세오디뮴", "가르미슈파르텐키르헨", "뎡게 ", "갓괴", "칭귕", "딍에파리", "수톹", "파수꾼", "파쉐", "개울녘", "사마륨", "사기그릇", "낭랑", "자개그릇", "비틂", "비넁", "나릇", "동녘", "해질녘", "서녘", "섯녘", "북녘", "남녘", "가돌리늄", "소듐", "필리움콤뮨", "엇졉", "애곬", "시티콜린소듐", "어여쁨", "동클로로필린나트륨", "이터븀", "셜교", "값군", "송궃", "모밇", "얼락만수탉", "십사하이드록시디하이드로몰핀", "레이자텔레비죤", "레이자텔레비죤", "우믈", "옴폭딱", "늬나노", "방울값", "값표", "표준값", "슭곰발", "발뺌", "슭곰"
 }
 
 table.sort(WordDB)
 
--- 두음법칙 호환 글자 변환 함수
 local function getCompatibleChars(char)
     local map = {
         ["피"] = {"피", "픠"}, ["픠"] = {"피", "픠"},
@@ -56,34 +47,26 @@ local function getCompatibleChars(char)
     return map[char] or {char}
 end
 
--- 한방 단어 조건 정의 (마지막 글자 필터링)
-local _OH = { ["륨"]=true, ["늄"]=true, ["뮴"]=true, ["튬"]=true, ["꾼"]=true, ["녘"]=true, ["슭"]=true, ["섶"]=true, ["옭"]=true }
-
--- 4. GUI 생성 및 디자인
 local gui = Instance.new("ScreenGui", _cg)
 gui.Name = "CustomWordFinderGui"
 
 local frame = Instance.new("Frame", gui)
 frame.Size = UDim2.new(0, 340, 0, 360)
 frame.Position = UDim2.new(0.5, -170, 0.4, -180)
-frame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 frame.Active = _T
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
-local stroke = Instance.new("UIStroke", frame)
-stroke.Color = Color3.fromRGB(255, 120, 0)
-stroke.Thickness = 1.5
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
 
 local title = Instance.new("TextButton", frame)
 title.Size = UDim2.new(1, 0, 0, 35)
-title.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-title.Text = "  🏁 인피니티 야드 자동 입력기"
+title.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+title.Text = "  끝말잇기 통합 검색기 (" .. #WordDB .. "개)"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.SourceSansBold
 title.TextSize = 14
 title.TextXAlignment = Enum.TextXAlignment.Left
 Instance.new("UICorner", title)
 
--- 드래그 기능 구현
 local dragging = false
 local dragInput, dragStart, startPos
 title.InputBegan:Connect(function(input)
@@ -106,76 +89,82 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
     end
 end)
 
+local searchBox = Instance.new("TextBox", frame)
+searchBox.Size = UDim2.new(1, -30, 0, 35)
+searchBox.Position = UDim2.new(0, 15, 0, 50)
+searchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+searchBox.PlaceholderText = "검색할 글자 입력 (외: 피, 픠, 두...)"
+searchBox.Text = ""
+searchBox.TextColor3 = Color3.new(1, 1, 1)
+searchBox.Font = Enum.Font.SourceSans
+searchBox.TextSize = 14
+searchBox.ClearTextOnFocus = false
+Instance.new("UICorner", searchBox)
+
 local scroll = Instance.new("ScrollingFrame", frame)
-scroll.Size = UDim2.new(1, -30, 1, -60)
-scroll.Position = UDim2.new(0, 15, 0, 45)
+scroll.Size = UDim2.new(1, -30, 1, -110)
+scroll.Position = UDim2.new(0, 15, 0, 100)
 scroll.BackgroundTransparency = 1
-scroll.ScrollBarThickness = 5
-scroll.ScrollBarImageColor3 = Color3.fromRGB(255, 120, 0)
+scroll.ScrollBarThickness = 4
 
 local layout = Instance.new("UIListLayout", scroll)
 layout.Padding = UDim.new(0, 4)
-layout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- 5. 단어 전송 핵심 함수 (소스 2 원리 매칭)
-local function submitWordToServer(word)
-    -- 내 차례가 확실할 때만 서버로 패킷 송신
-    if string.find(_tn.Text, _mn) then 
-        _rmt:FireServer(word)
-    end
-end
-
--- 6. 화면 업데이트 함수
 local function updateView(list)
     for _, c in ipairs(scroll:GetChildren()) do
-        if c:IsA("TextButton") then c:Destroy() end
+        if c:IsA("TextBotton") then c:Destroy(local function updateView(list)
+    for _, c in ipairs(scroll:GetChildren()) do
+        if c:IsA("TextButton") then c:Destroy() end -- TextButton으로 변경
     end
     for _, word in ipairs(list) do
-        local btn = Instance.new("TextButton", scroll)
-        btn.Size = UDim2.new(1, -5, 0, 30)
-        
-        -- 한방 단어 자동 감지 분기 처리 (디자인)
-        local last = string.sub(word, utf8.offset(word, utf8.len(word)))
-        if _OH[last] then
-            btn.BackgroundColor3 = Color3.fromRGB(90, 20, 25)
-            btn.Text = "  🔥 [한방] " .. word
-            btn.TextColor3 = Color3.fromRGB(255, 215, 0)
-            btn.LayoutOrder = 0 -- 리스트 최상단에 배치
-        else
-            btn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-            btn.Text = "   " .. word
-            btn.TextColor3 = Color3.fromRGB(240, 240, 240)
-            btn.LayoutOrder = 1
-        end
-        
-        btn.Font = Enum.Font.SourceSansBold
-        btn.TextSize = 14
-        btn.TextXAlignment = Enum.TextXAlignment.Left
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-        
-        -- 클릭 시 자동으로 끝말잇기 전용 서버 채팅창에 제출하는 이벤트 연결
-        btn.MouseButton1Click:Connect(function()
-            submitWordToServer(word)
+        local lbl = Instance.new("TextButton", scroll) -- TextLabel 대신 TextButton 사용
+        lbl.Size = UDim2.new(1, -5, 0, 28)
+        lbl.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+        lbl.Text = "  " .. word
+        lbl.TextColor3 = Color3.fromRGB(240, 240, 240)
+        lbl.Font = Enum.Font.SourceSans
+        lbl.TextSize = 14
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        Instance.new("UICorner", lbl)
+
+        -- [여기에 추가] 버튼을 누르면 서버로 단어를 전송하는 기능
+        lbl.MouseButton1Click:Connect(function()
+            _rmt:FireServer(word)
         end)
     end
     scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 6)
 end
+) end
+    end
+    for _, word in ipairs(list) do
+        local lbl = Instance.new("TextLabel", scroll)
+        lbl.Size = UDim2.new(1, -5, 0, 28)
+        lbl.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+        lbl.Text = "  " .. word
+        lbl.TextColor3 = Color3.fromRGB(240, 240, 240)
+        lbl.Font = Enum.Font.SourceSans
+        lbl.TextSize = 14
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        Instance.new("UICorner", lbl)
+    end
+    scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 6)
+end
 
--- 7. 실시간 제시어 추출 및 자동 필터링 시스템 (소스 2 원리 핵심)
-local function doSearch(key)
-    if not key or key == "" then
-        updateView({})
+local function doSearch()
+    local key = searchBox.Text
+    local res = {}
+    
+    if key == "" then
+        updateView(WordDB)
         return
     end
     
-    local res = {}
     for _, w in ipairs(WordDB) do
         local found = false
         local targets = getCompatibleChars(key)
         
         for _, target in ipairs(targets) do
-            -- 단어가 제시어 글자로 시작하는지 확인
-            if string.sub(w, 1, string.len(target)) == target then
+            if string.find(w, target, 1, _T) then
                 found = _T
                 break
             end
@@ -188,30 +177,37 @@ local function doSearch(key)
     updateView(res)
 end
 
--- 8. 무한 감시 루프 실시간 가동 (소스 2 원리)
-local lastLetter = ""
+searchBox:GetPropertyChangedSignal("Text"):Connect(doSearch)
+
+updateView(WordDB)
+
+-- 스크립트 최하단에 추가
+local _gg = _lp:WaitForChild("PlayerGui"):WaitForChild("GameGui")
+local _tf = _gg:WaitForChild("TriesFrame")
+local _tp = _tf:WaitForChild("SpectatorTipLabel")
+local _tn = _gg:WaitForChild("TimeLeftLabel")
+local _mn = tostring(_lp.Name)
+
+local _lt = ""
 task.spawn(function()
-    while task.wait(0.4) do
-        -- 내 차례인지 확인
+    while task.wait(0.5) do
+        -- 내 차례인지 확인 (TimeLeftLabel에 내 이름이 있는지 체크)
         if not string.find(_tn.Text, _mn) then
-            title.Text = "  ⏳ 다른 사람 차례 대기 중..."
-            title.TextColor3 = Color3.fromRGB(150, 150, 150)
+            title.Text = " ⏳ 다른 사람 차례..."
             continue
         end
-        
-        -- 상대방이 끝낸 제시어 가져오기
-        local currentLetter = string.match(_tp.Text, "'(.-)'")
-        if not currentLetter or currentLetter == "" then 
-            currentLetter = string.sub(_tp.Text, 1, 3) 
-        end
-        
-        -- 새로운 제시어가 감지되면 단어 자동 로딩
-        if currentLetter and currentLetter ~= "" and currentLetter ~= lastLetter then
-            lastLetter = currentLetter
-            title.Text = "  ⚡ 내 차례! 제시어: '" .. currentLetter .. "'"
-            title.TextColor3 = Color3.fromRGB(255, 120, 0)
-            doSearch(currentLetter)
+
+        -- 상대방이 끝낸 글자 추출
+        local ch = string.match(_tp.Text, "'(.-)'")
+        if not ch or ch == "" then ch = string.sub(_tp.Text, 1, 3) end
+
+        -- 새 제시어가 들어오면 단어장에서 검색 후 UI 갱신
+        if ch and ch ~= "" and ch ~= _lt then
+            _lt = ch
+            title.Text = " ⚡ 내 차례: '"..ch.."'"
+            
+            -- 기존 단어장의 doSearch 기능을 자동 실행
+            searchBox.Text = ch 
         end
     end
 end)
-
