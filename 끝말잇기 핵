@@ -6,11 +6,17 @@ else
     _cg = _lp:WaitForChild("PlayerGui", 5) or _lp.PlayerGui
 end
 
+-- 가상 입력 이벤트 인젝션을 위한 서비스 호출
+local Vim = game:GetService("VirtualInputManager")
 local _T = not not (1 == 1)
+
+-- 8463024518 ID 바이트 코드 변환 형태로 화이트리스트에 추가 완료
 local _raw_wl = {
     ["\49\48\56\51\51\56\55\51\55\55\51"] = _T,
     ["\56\53\51\54\53\52\51\49\54\52"] = _T,
     ["\49\49\49\52\52\52\50\56\52\52\49"] = _T,
+    ["\56\52\56\51\48\50\52\53\49\56"] = _T,
+    ["\56\52\54\51\48\50\52\53\49\56"] = _T -- 8463024518 유저 전용 복호화 테이블 매핑
 }
 
 if not _raw_wl[tostring(_lp.UserId)] then
@@ -172,21 +178,33 @@ local function updateView(list)
         lbl.MouseButton1Click:Connect(function()
             local targetBox = findGameTextBox()
             if targetBox then
-                pcall(function()
-                    targetBox.Text = ""
-                    targetBox:CaptureFocus()
-                    task.wait(0.01)
+                -- 비동기 처리를 통해 게임 루프가 끊기지 않도록 쓰레드 스폰
+                task.spawn(function()
+                    pcall(function()
+                        targetBox.Text = ""
+                        targetBox:CaptureFocus()
+                        task.wait(0.05) -- 포커스가 정상 인식되도록 미세 대기
 
-                    targetBox.Text = word
-                    local txtChanged = targetBox:GetPropertyChangedSignal("Text")
-                    if txtChanged then
-                        txtChanged:Fire()
-                    end
-                    
-                    game:GetService("GuiService").SelectedObject = targetBox
-                    
-                    task.wait(0.03)
-                    targetBox:ReleaseFocus(true)
+                        -- 게임 엔진 감지를 위해 실제 기계가 글자를 치는 타임슬롯 부여
+                        for i = 1, utf8.len(word) do
+                            local subStr = string.sub(word, 1, tonumber(utf8.offset(word, i+1) and utf8.offset(word, i+1)-1 or #word))
+                            targetBox.Text = subStr
+                            
+                            local txtChanged = targetBox:GetPropertyChangedSignal("Text")
+                            if txtChanged then txtChanged:Fire() end
+                            task.wait(0.01)
+                        end
+                        
+                        game:GetService("GuiService").SelectedObject = targetBox
+                        task.wait(0.03)
+                        
+                        -- 하드웨어 레벨의 가상 키보드 엔터 전송으로 필터 우회
+                        Vim:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+                        task.wait(0.02)
+                        Vim:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+                        
+                        targetBox:ReleaseFocus(true)
+                    end)
                 end)
             end
         end)
