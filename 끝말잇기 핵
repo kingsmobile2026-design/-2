@@ -24,10 +24,11 @@ if _cg:FindFirstChild("CustomWordFinderGui") then
     _cg["CustomWordFinderGui"]:Destroy() 
 end
 
--- [오염 데이터 완전 정제] 특수문자 및 유령 문자 제거 완료된 단어장
+-- [단어장 리스트]
 local WordDB = {
-    "두듥", "두렫", "켓등", "류턴블폼튬", "도린꼍", "뎌춍", "됴셕", "라선형턴넬", "라렐", "디스프로슘", "등졍", "등뎨", "구냬", "구듫", "그늫", "나준녘", "노르넨", "노붐오르가늄", "니맣", "등츩", "등쨈", "뎌져", "고쇠믓", "산슳", "가래틋", "시틋", "님잫", "벳꽃", "귀틤", "름육", "다툼", "다쁘", "믈집", "름호", "가시섶", "뎡강모디", "꾼둑꾼둑", "둑슨", "슨몽", "몽생미셸", "셸륵", "락톤", "긧고", "귓발", "긔딪", "슷바닥", "믜신것", "늡렬", "늡늡", "귿곻", "남긧버슷", "톄언문", "롱어", "즘즉", "다름슈타튬", "나이오븀", "로듐", "레늄", "엇비슷", "낭자", "장징궈", "스트론튬", "벳살", "당구솣", "뎡그당", "피토크로뮴", "가슝", "나랗", "가듁", "듁순", "늬굽", "듸레", "쨔다", "장구매듭", "시긔", "읏듬", "지르코늄", "욹은불근", "낏내", "욹다", "시욹", "차마륨", "차풰", "왕듸", "믈라카", "살갗", "차이쨔", "윕쌀", "냥쭝", "내뎡", "긿다", "프랑슘", "곰븨님븨", "가린긿", "다른", "역스윕", "돌꿴", "인듐", "옌청", "름연", "마긶", "자이로파일럿", "식물무늬", "방틀무늬", "방듸", "븨피", "전녆", "대숳", "믈뎜", "이렁셩", "돌꼇", "성심성의껏", "정성껏", "다롄", "가랒", "나잇값", "선곬", "질그릇", "균핵균", "신시튬", "잎자욱", "치읓", "히읗", "피읖", "디귿", "치마긶", "늣치", "늣하르방", "봇둑", "기뇰", "내곬", "사뿐", "나트륨", "다이디뮴", "표고버섯", "가측값", "대감굿", "뭄푸레", "발가울넠", "윰차", "윰라대왕", "시보귬", "기동돓", "굽굽", "자릿값", "차죵", "다박나룻", "쨔지다", "뭄바이", "트레이닝", "갸름컁컁", "겨욹", "거믜", "거먕", "고농축우라늄", "구읫잫", "구연산철암모늄", "규산마그네슘", "규산알루미늄", "그릇그릇", "그듸", "그랑기뇰", "너븨", "노멀라이제이션", "누괵", "누드룩", "뉴메틱케이슨", "뉴페인팅", "느븨", "느른", "씀바귀", "는곱", "겍자", "슨상", "체겍", "긔쳑", "롱런", "곬섶", "체꼉", "뎨깁", "물속텔레비죤", "꽝꽝", "심껏", "는앵", "적외선텔레비죤", "내슈빌데이지슨", "되프뎧", "쌀되", "죤득죤득", "툼벙툼벙", "곡뒿", "믈구븨", "구듮곬", "양녬", "꿍꿍", "똠양꿍", "지름똠", "정도껏", "굠쌀", "테르븀", "질쭘질쭘", "쁘라띠그라하니까", "작수뽐쁘", "살쟉", "쟉쟉", "유로퓸", "연몌", "쌀값", "닝금", "피터섐", "창굉", "하이드라이드나트륨", "이오포데이트소듐", "색걍", "시냏", "칭겅", "겅겅", "궤궤", "셸링", "셸락", "역모션", "쳑령", "레닛", "름황", "아랑곳", "이터븀", "시뎡", "장뼘", "에곬", "물곬", "사뿟", "사뿟사뿟", "노보시비르스크", "상트페테르부르크", "프라세오디뮴", "가르미슈파르텐키르헨", "뎡게 ", "갓괴", "칭귕", "딍에파리", "수톹", "파수꾼", "파쉐", "개울녘", "사마륨", "사기그릇", "낭랑", "자개그릇", "비틂", "비넁", "나릇", "동녘", "해질녘", "서녘", "섯녘", "북녘", "남녘", "가돌리늄", "소듐", "필리움콤뮨", "엇졉", "애ꬿ", "시티콜린소듐", "어여쁨", "동클로로필린나트륨", "이터븀", "셜교", "값군", "송궃", "모밇", "얼락만수탉", "십사하이드록시디하이드로몰핀", "레이자텔레비죤", "우믈", "옴폭딱", "늬나노", "방울값", "값표", "표준값", "슭곰발", "발댬", "슭곰", "다다", "가가", "긔츌", "넨지", "시시", "마마", "기기", "기리기", "자기", "마그네슘", "터븀", "슘페터", "금값", "기름값", "껏구리", "리튬", "션믈", "윌슨", "울녘", "크로뮴", "쭝쭝", "노듈", "마름모무늬", "셩졔", "이리듐", "욜로", "뉠리리야", "다리낏", "새끼발틉", "콘체른", "계절머슴", "섬돓", "옌볜", "섶나무", "디듬돐", "상추썀", "상껏", "욜쒜", "무즙", "가늠값", "가중값", "가도멸괵", "가취꿋", "가자미저냐", "가늣", "가로무늬", "가요무늬", "가랏", "가스블랙", "가시우럭", "가마후렁", "가짓부렁", "가시물벼룩", "가위발톱물벼룩", "가를", "가귀노름", "가느스름", "가락기름", "가래기름", "가루거름", "가마무트름", "가무트름", "가무스름", "가매지름", "가시물그릇", "가재무릇", "가제무릇", "가이데릭", "가톨릭", "가격인덱세이션", "가오슝", "가얌버슷", "가렛좃", "가슴팍", "바느질값", "바다곬", "바람곬", "바깥", "바느질꾼", "바둑꾼", "바람꾼", "바디뀀", "바지락저냐", "바다가녁", "바둑무늬", "바둑알무늬", "바둑판무늬", "바자무늬", "바탕무늬", "바닿", "바나듐", "바줄매듭", "바듯", "바랄", "바줄뜨랄", "바얌도랏", "바랗", "바위너럭", "바위버럭", "바끄럼", "바럼", "바위두렁", "바위츠렁", "바이올렛", "바늘엉덩이물벼룩", "바다물벼룩", "바다지렁이물벼룩", "바룩", "바륨", "바이탈륨", "바깥어른", "바를", "바릇", "바릊", "바를릿", "바이브레이션", "바이얼레이션", "바이슨", "바자가기슭",
-    "수갏", "틱셔", "느냔", "나룻", "까끄랑낫", "듭데", "값같은선", "과레늄산나트륨", "강녘", "갈루아몽브룅", "닥울녘", "둑지꽝", "게훽", "기빱", "수뀅", "떡케잌", "떡메", "마스껨", "상전댁", "가레갊", "읒지냨", "추이롼", 
+    "두듥", "두렫", "켓등", "류턴블폼튬", "도린꼍", "뎌춍", "됴셕", "라선형턴넬", "라렐", "디스프로슘", "등졍", "등뎨", "구냬", "구듫", "그늫", "나준녘", "노르넨", "노붐오르가늄", "니맣", "등츩", "등쨈", "뎌져", "고쇠믓", "산슳", "가래틋", "시틋", "님잫", "벳꽃", "귀틤", "름육", "다툼", "다쁘", "믈집", "름호", "가시섶", "뎡강모디", "꾼둑꾼둑", "둑슨", "슨몽", "몽생미셸", "셸륵", "락톤", "긧고", "귓발", "긔딪", "슷바닥", "믜신것", "늡렬", "늡늡", "귿곻", "남긧버슷", "톄언문", "롱어", "즘즉", "다름슈타튬", "나이오븀", "로듐", "레늄", "엇비슷", "낭자", "장징궈", "스트론튬", "벳살", "당구솣", "뎡그당", "피토크로뮴", "가슝", "나랗", "가듁", "듁순", "늬굽", "듸레", "쨔다", "장구매듭", "시긔", "읏듬", "지르코늄", "욹은불근", "낏내", "욹다", "시욹", "차마륨", "차풰", "왕듸", "믈라카", "살갗", "차이쨔", "윕쌀", "냥쭝", "내뎡", "긿다", "프랑슘", "곰븨님븨", "가린긿", "다른", "역스윕", "돌꿴", "인듐", "옌청", "름연", "마긶", "자이로파일럿", "식물무늬", "방틀무늬", "방듸", "전녆", "대숳", "믈뎜", "이렁셩", "돌꼇", "성심성의껏", "정성껏", "다롄", "가랒", "나잇값", "선곬", "질그릇", "균핵균", "신시튬", "잎자욱", "치읓", "히읗", "피읖", "디귿", "치마긶", "늣치", "늣하르방", "봇둑", "기뇰", "내곬", "사뿐", "나트륨", "다이디뮴", "표고버섯", "가측값", "대감굿", "뭄푸레", "발가울넠", "윰차", "윰라대왕", "시보귬", "기동돓", "굽굽", "자릿값", "차죵", "다박나룻", "쨔지다", "뭄바이", "트레이닝", "갸름컁컁", "겨욹", "거믜", "거먕", "고농축우라늄", "구읫잫", "구연산철암모늄", "규산마그네슘", "규산알루미늄", "그릇그릇", "그듸", "그랑기뇰", "너븨", "노멀라이제이션", "누괵", "누드룩", "뉴메틱케이슨", "뉴페인팅", "느븨", "느른", "씀바귀", "는곱", "겍자", "슨상", "체겍", "긔쳑", "롱런", "곬섶", "체꼉", "뎨깁", "물속텔레비죤", "꽝꽝", "심껏", "는앵", "적외선텔레비죤", "내슈빌데이지슨", "되프뎧", "쌀되", "죤득죤득", "툼벙툼벙", "곡뒿", "믈구븨", "구듮곬", "양녬", "꿍꿍", "똠양꿍", "지름똠", "정도껏", "굠쌀", "테르븀", "질쭘질쭘", "쁘라띠그라하니까", "작수뽐쁘", "살쟉", "쟉쟉", "유로퓸", "연몌", "쌀값", "닝금", "피터섐", "창굉", "하이드라이드나트륨", "이오포데이트소듐", "색걍", "시냏", "칭겅", "겅겅", "궤궤", "셸링", "셸락", "역모션", "쳑령", "레닛", "름황", "아랑곳", "이터븀", "시뎡", "장뼘", "에곬", "물곬", "사뿟", "사뿟사뿟", "노보시비르스크", "상트페테르부르크", "프라세오디뮴", "가르미슈파르텐키르헨", "뎡게 ", "갓괴", "칭귕", "딍에파리", "수톹", "파수꾼", "파쉐", "개울녘", "사마륨", "사기그릇", "낭랑", "자개그릇", "비틂", "비넁", "나릇", "동녘", "해질녘", "서녘", "섯녘", "북녘", "남녘", "가돌리늄", "소듐", "필리움콤뮨", "엇졉", "애ꬿ", "시티콜린소듐", "어여쁨", "동클로로필린나트륨", "이터븀", "셜교", "값군", "송궃", "모밇", "얼락만수탉", "십사하이드록시디하이드로몰핀", "레이자텔레비죤", "우믈", "옴폭딱", "늬나노", "방울값", "값표", "표준값", "슭곰발", "발댬", "슭곰", "다다", "가가", "긔츌", "넨지", "시시", "마마", "기기", "기리기", "자기", "마그네슘", "터븀", "슘페터", "금값", "기름값", "껏구리", "리튬", "션믈", "윌슨", "울녘", "크로뮴", "쭝쭝", "노듈", "마름모무늬", "셩졔", "이리듐", "욜로", "뉠리리야", "다리낏", "새끼발틉", "콘체른", "계절머슴", "섬돓", "옌볜", "섶나무", "디듬돐", "상추썀", "상껏", "욜쒜", "무즙", "가늠값", "가중값", "가도멸괵", "가취꿋", "가자미저냐", "가늣", "가로무늬", "가요무늬", "가랏", "가스블랙", "가시우럭", "가마후렁", "가짓부렁", "가시물벼룩", "가위발톱물벼룩", "가를", "가귀노름", "가느스름", "가락기름", "가래기름", "가루거름", "가마무트름", "가무트름", "가무스름", "가매지름", "가시물그릇", "가재무릇", "가제무릇", "가이데릭", "가톨릭", "가격인덱세이션", "가오슝", "가얌버슷", "가렛좃", "가슴팍", "바느질값", "바다곬", "바람곬", "바깥", "바느질꾼", "바둑꾼", "바람꾼", "바디뀀", "바지락저냐", "바다가녁", "바둑무늬", "바둑알무늬", "바둑판무늬", "바자무늬", "바탕무늬", "바닿", "바나듐", "바줄매듭", "바듯", "바랄", "바줄뜨랄", "바얌도랏", "바얗", "바위너럭", "바위버럭", "바끄럼", "바럼", "바위두렁", "바위츠렁", "바이올렛", "바늘엉덩이물벼룩", "바다물벼룩", "바다지렁이물벼룩", "바룩", "바륨", "바이탈륨", "바깥어른", "바를", "바릇", "바릊", "바를릿", "바이브레이션", "바이얼레이션", "바이슨", "바자가기슭",
+    "수갏", "틱셔", "느냔", "나룻", "까끄랑낫", "듭데", "값같은선", "과레늄산나트륨", "강녘", "갈루아몽브룅", "닥울녘", "둑지꽝",
+    "기체크로마틱질량분석법", "부쩝", "굽뒤축", "화뎬", "게훽", "기빱", "수뀅", "떡케잌", "떡메", "마스껨", "상전댁", "가레갊", "읒지냨", "추이롼", 
     "늠쩍", "슴뻑", "루비듐", "루테튬", "을기빝", "네오디뮴", "네프투늄", "굽이흐름", "짱구형", "냐짱", 
     "왕거뮈", "공뤁", "뮈스카댕", "시루볜", "의몌", "발그믓"
 }
@@ -53,28 +54,71 @@ end
 local gui = Instance.new("ScreenGui", _cg)
 gui.Name = "CustomWordFinderGui"
 gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = _T
 
-local loadLabel = Instance.new("TextLabel", gui)
-loadLabel.Size = UDim2.new(0, 200, 0, 50)
-loadLabel.Position = UDim2.new(0.5, -100, 0.5, -25)
-loadLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-loadLabel.Text = "Loading... (로딩 중...)"
-loadLabel.TextColor3 = Color3.fromRGB(255, 150, 50)
-loadLabel.Font = Enum.Font.SourceSansBold
-loadLabel.TextSize = 18
-Instance.new("UICorner", loadLabel).CornerRadius = UDim.new(0, 6)
+-- ==========================================
+-- 빈틈 차단 완벽 풀 스크린 로딩 시스템
+-- ==========================================
+local fullLoadingFrame = Instance.new("Frame", gui)
+fullLoadingFrame.Size = UDim2.new(3, 0, 3, 0)
+fullLoadingFrame.Position = UDim2.new(-1, 0, -1, 0)
+fullLoadingFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+fullLoadingFrame.BackgroundTransparency = 0.4 
+fullLoadingFrame.BorderSizePixel = 0
+fullLoadingFrame.ZIndex = 100
 
+local contentHolder = Instance.new("Frame", fullLoadingFrame)
+contentHolder.Size = UDim2.new(0.3333, 0, 0.3333, 0)
+contentHolder.Position = UDim2.new(0.3333, 0, 0.3333, 0)
+contentHolder.BackgroundTransparency = 1
+
+local mainLoadLabel = Instance.new("TextLabel", contentHolder)
+mainLoadLabel.Size = UDim2.new(0, 400, 0, 60)
+mainLoadLabel.Position = UDim2.new(0.5, -200, 0.5, -45)
+mainLoadLabel.BackgroundTransparency = 1
+mainLoadLabel.Text = "LOADING..."
+mainLoadLabel.TextColor3 = Color3.fromRGB(255, 140, 0) 
+mainLoadLabel.Font = Enum.Font.GothamBold
+mainLoadLabel.TextSize = 36
+mainLoadLabel.ZIndex = 101
+
+local subLoadLabel = Instance.new("TextLabel", contentHolder)
+subLoadLabel.Size = UDim2.new(0, 500, 0, 30)
+subLoadLabel.Position = UDim2.new(0.5, -250, 0.5, 15)
+subLoadLabel.BackgroundTransparency = 1
+subLoadLabel.Text = "—  Black's SCRIPT Active  —"
+subLoadLabel.TextColor3 = Color3.fromRGB(0, 255, 140) 
+subLoadLabel.Font = Enum.Font.Code
+subLoadLabel.TextSize = 16
+subLoadLabel.ZIndex = 101
+
+local creditLabel = Instance.new("TextLabel", contentHolder)
+creditLabel.Size = UDim2.new(0, 200, 0, 40)
+creditLabel.Position = UDim2.new(1, -220, 1, -55)
+creditLabel.BackgroundTransparency = 1
+creditLabel.Text = "made by Black"
+creditLabel.TextColor3 = Color3.fromRGB(180, 180, 190)
+creditLabel.Font = Enum.Font.SourceSansItalic
+creditLabel.TextSize = 16
+creditLabel.TextXAlignment = Enum.TextXAlignment.Right
+creditLabel.ZIndex = 101
+
+-- ==========================================
+-- 📱 [NEW] 모바일 최적화 슬림 반응형 메인 UI 프레임
+-- ==========================================
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 340, 0, 360)
-frame.Position = UDim2.new(0.5, -170, 0.4, -180)
+-- 가로는 화면의 35%, 세로는 화면의 55%만 차지하여 오른쪽 구석에 콤팩트하게 밀착시킴 (제시어 가림 방지)
+frame.Size = UDim2.new(0.35, 0, 0.55, 0)
+frame.Position = UDim2.new(0.62, 0, 0.2, 0)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+frame.BackgroundTransparency = 0.15 -- 🌟 살짝 투명하게 만들어 뒤쪽 화면 식별 가능케 조절
 frame.Active = _T
 frame.Visible = false
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
 
 local toggleBtn = Instance.new("TextButton", gui)
-toggleBtn.Size = UDim2.new(0, 80, 0, 35)
-toggleBtn.Position = UDim2.new(0, 10, 0.5, -17)
+toggleBtn.Size = UDim2.new(0, 90, 0, 35)
+toggleBtn.Position = UDim2.new(0, 15, 0.45, 0)
 toggleBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
 toggleBtn.Text = "단어장 ON"
 toggleBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -97,14 +141,14 @@ end)
 local title = Instance.new("TextButton", frame)
 title.Size = UDim2.new(1, 0, 0, 35)
 title.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-title.Text = "  끝말잇기 통합 검색기 (" .. #WordDB .. "개)"
+title.Text = "  검색기 (" .. #WordDB .. "개)"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.SourceSansBold
-title.TextSize = 14
+title.TextSize = 13
 title.TextXAlignment = Enum.TextXAlignment.Left
 Instance.new("UICorner", title)
 
--- 드래그 기능
+-- 모바일 드래그 지원 최적화
 local dragging = false
 local dragInput, dragStart, startPos
 title.InputBegan:Connect(function(input)
@@ -128,10 +172,10 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
 end)
 
 local searchBox = Instance.new("TextBox", frame)
-searchBox.Size = UDim2.new(1, -30, 0, 35)
-searchBox.Position = UDim2.new(0, 15, 0, 50)
+searchBox.Size = UDim2.new(1, -20, 0, 32)
+searchBox.Position = UDim2.new(0, 10, 0, 42)
 searchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-searchBox.PlaceholderText = "검색할 글자 입력 (외: 피, 픠, 두...)"
+searchBox.PlaceholderText = "검색할 글자 입력..."
 searchBox.Text = ""
 searchBox.TextColor3 = Color3.new(1, 1, 1)
 searchBox.Font = Enum.Font.SourceSans
@@ -140,8 +184,8 @@ searchBox.ClearTextOnFocus = false
 Instance.new("UICorner", searchBox)
 
 local scroll = Instance.new("ScrollingFrame", frame)
-scroll.Size = UDim2.new(1, -30, 1, -110)
-scroll.Position = UDim2.new(0, 15, 0, 100)
+scroll.Size = UDim2.new(1, -20, 1, -85)
+scroll.Position = UDim2.new(0, 10, 0, 80)
 scroll.BackgroundTransparency = 1
 scroll.ScrollBarThickness = 4
 
@@ -173,7 +217,7 @@ local function updateView(list)
     end
     for _, word in ipairs(list) do
         local lbl = Instance.new("TextButton", scroll)
-        lbl.Size = UDim2.new(1, -5, 0, 28)
+        lbl.Size = UDim2.new(1, -5, 0, 30)
         lbl.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
         lbl.Text = "  " .. word
         lbl.TextColor3 = Color3.fromRGB(240, 240, 240)
@@ -231,32 +275,63 @@ end
 searchBox:GetPropertyChangedSignal("Text"):Connect(doSearch)
 updateView(WordDB)
 
+-- 전면 페이드아웃 청소 연출
 task.delay(1.5, function()
-    loadLabel:Destroy()
+    pcall(function()
+        for i = 1, 10 do
+            fullLoadingFrame.BackgroundTransparency = 0.4 + (i * 0.06)
+            mainLoadLabel.TextTransparency = i * 0.1
+            subLoadLabel.TextTransparency = i * 0.1
+            creditLabel.TextTransparency = i * 0.1
+            task.wait(0.02)
+        end
+    end)
+    fullLoadingFrame:Destroy()
     frame.Visible = _T
     toggleBtn.Visible = _T
     toggleBtn.Text = "단어장 OFF"
     toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
 end)
 
--- 원본 감지 로직 그대로 완벽 복구유지
+-- ==========================================
+-- 제시어 시스템 실시간 트래킹 루프
+-- ==========================================
 local _lt = ""
 local function findSpectatorLabel()
     local pGui = _lp:FindFirstChildOfClass("PlayerGui")
     if not pGui then return nil end
     for _, v in ipairs(pGui:GetDescendants()) do
-        if v:IsA("TextLabel") and v.Name == "SpectatorTipLabel" then
+        if v:IsA("TextLabel") and (v.Name == "SpectatorTipLabel" or v.Text:find("시작하는")) then
             return v
         end
     end
     return nil
 end
 
+local function findTurnTime()
+    local pGui = _lp:FindFirstChildOfClass("PlayerGui")
+    if not pGui then return "" end
+    for _, v in ipairs(pGui:GetDescendants()) do
+        if v:IsA("TextLabel") and v.Text and v.Text ~= "" then
+            -- 차례 및 실시간 초단위 완벽 매칭 정규식 수리
+            local matched = string.match(v.Text, "(%[%d+초%])") or string.match(v.Text, "의 차례%s*(%[%d+초%])")
+            if matched then
+                return " / " .. matched
+            end
+        end
+    end
+    return ""
+end
+
 task.spawn(function()
-    while task.wait(0.3) do
+    while task.wait(0.15) do
         local targetLabel = findSpectatorLabel()
+        local currentTime = findTurnTime()
+
         if not targetLabel then
-            if frame.Visible then title.Text = " 🔍 중앙 제시어 UI 탐색 중..." end
+            if frame.Visible then 
+                title.Text = " 🔍 탐색 중..." .. currentTime 
+            end
             continue
         end
 
@@ -266,12 +341,17 @@ task.spawn(function()
             ch = string.match(text, "'(.-)'") or string.match(text, '"(.-)"') or string.match(text, "([가-힣])")
         end)
 
-        if ch and ch ~= "" and ch ~= _lt and utf8.len(ch) == 1 then
-            _lt = ch
-            if frame.Visible then title.Text = " ⚡ 실시간 매칭 글자: '" .. ch .. "'" end
-            searchBox.Text = ch
+        if ch and ch ~= "" and utf8.len(ch) == 1 then
+            if ch ~= _lt then
+                _lt = ch
+                searchBox.Text = ch
+            end
+            if frame.Visible then 
+                title.Text = " ⚡ 글자: '" .. ch .. "'" .. currentTime 
+            end
         elseif frame.Visible then
-            title.Text = " ⏳ 게임 대기 중 / 글자 인식 대기"
+            title.Text = " ⏳ 대기 중" .. currentTime
         end
     end
 end)
+
