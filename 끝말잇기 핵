@@ -100,6 +100,7 @@ title.TextSize = 14
 title.TextXAlignment = Enum.TextXAlignment.Left
 Instance.new("UICorner", title)
 
+-- 드래그 기능
 local dragging = false
 local dragInput, dragStart, startPos
 title.InputBegan:Connect(function(input)
@@ -143,13 +144,20 @@ scroll.ScrollBarThickness = 4
 local layout = Instance.new("UIListLayout", scroll)
 layout.Padding = UDim.new(0, 4)
 
+-- 상대 턴에서도 작동하도록 강화된 함수
 local function findGameTextBox()
     local pGui = _lp:FindFirstChildOfClass("PlayerGui")
     if not pGui then return nil end
     for _, v in ipairs(pGui:GetDescendants()) do
-        -- 인게임 정식 단어 입력 전용 TextBox 필터 서치
-        if v:IsA("TextBox") and v.Parent and (v.Parent.Name == "TypeFrame" or v.Name == "TextBox" or v.Name == "InputText") then
-            if v.Visible and v.Parent.Visible then
+        if v:IsA("TextBox") then
+            if v.Parent and (v.Parent.Name == "TypeFrame" or v.Name == "TextBox" or v.Name == "InputText" or 
+               v.Name:find("Input") or v.Name:find("Type") or v.Name:find("Chat")) then
+                -- 강제 활성화
+                v.Visible = _T
+                if v.Parent then v.Parent.Visible = _T end
+                v.Active = _T
+                v.Selectable = _T
+                v.Interactable = _T
                 return v
             end
         end
@@ -174,35 +182,24 @@ local function updateView(list)
 
         lbl.MouseButton1Click:Connect(function()
             local targetBox = findGameTextBox()
-            if targetBox then
-                pcall(function()
-                    -- 1. 입력창 강제 비우기
-                    targetBox.Text = ""
-                    
-                    -- 2. 시스템 캐릭터 포커스(TextBoxFocused) 자극 및 활성화
-                    targetBox:CaptureFocus()
-                    task.wait(0.01)
+            if not targetBox then return end
 
-                    -- 3. 단어 데이터 입력
-                    targetBox.Text = word
-                    
-                    -- 4. 로블록스 오리지널 변경 신호 전달
-                    local txtChanged = targetBox:GetPropertyChangedSignal("Text")
-                    if txtChanged then
-                        txtChanged:Fire()
-                    end
-                    task.wait(0.02)
-                    
-                    -- 5. [핵심수정] FocusLost 이벤트를 유저가 정상적으로 Enter 친 모드로 직접 가공 주입
-                    if targetBox.FocusLost then
-                        targetBox.FocusLost:Fire(true, nil)
-                    end
-                    task.wait(0.01)
-                    
-                    -- 6. 최종 포커스 차단 해제 및 엔터 완결 처리 (캐릭터 이동 시스템 연동 규격 호환)
-                    targetBox:ReleaseFocus(true)
-                end)
-            end
+            pcall(function()
+                targetBox.Text = ""
+                targetBox:CaptureFocus()
+                task.wait(0.05)
+                
+                targetBox.Text = word
+                targetBox:GetPropertyChangedSignal("Text"):Fire()
+                task.wait(0.03)
+                
+                if targetBox.FocusLost then
+                    targetBox.FocusLost:Fire(_T, Enum.UserInputType.Keyboard)
+                end
+                task.wait(0.05)
+                
+                targetBox:ReleaseFocus(_T)
+            end)
         end)
     end
     scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 6)
@@ -232,16 +229,17 @@ end
 searchBox:GetPropertyChangedSignal("Text"):Connect(doSearch)
 updateView(WordDB)
 
+-- 로딩 완료
 task.delay(1.5, function()
     loadLabel:Destroy()
-    frame.Visible = true
-    toggleBtn.Visible = true
+    frame.Visible = _T
+    toggleBtn.Visible = _T
     toggleBtn.Text = "단어장 OFF"
     toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
 end)
 
+-- 실시간 제시어 감지
 local _lt = ""
-
 local function findSpectatorLabel()
     local pGui = _lp:FindFirstChildOfClass("PlayerGui")
     if not pGui then return nil end
@@ -263,22 +261,15 @@ task.spawn(function()
 
         local text = targetLabel.Text
         local ch = ""
-        
         pcall(function()
-            ch = string.match(text, "'(.-)'")
-            if not ch or ch == "" then
-                ch = string.match(text, '"(.-)"')
-            end
-            if not ch or ch == "" then
-                ch = string.match(text, "([가-힣])")
-            end
+            ch = string.match(text, "'(.-)'") or string.match(text, '"(.-)"') or string.match(text, "([가-힣])")
         end)
 
         if ch and ch ~= "" and ch ~= _lt and utf8.len(ch) == 1 then
             _lt = ch
             if frame.Visible then title.Text = " ⚡ 실시간 매칭 글자: '" .. ch .. "'" end
             searchBox.Text = ch
-        elseif (text == "" or not ch) and frame.Visible then
+        elseif frame.Visible then
             title.Text = " ⏳ 게임 대기 중 / 글자 인식 대기"
         end
     end
