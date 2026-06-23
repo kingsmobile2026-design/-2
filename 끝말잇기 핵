@@ -61,9 +61,6 @@ gui.Name = "CustomWordFinderGui"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = _T
 
--- ==========================================
--- 빈틈 차단 완벽 풀 스크린 로딩 시스템
--- ==========================================
 local fullLoadingFrame = Instance.new("Frame", gui)
 fullLoadingFrame.Size = UDim2.new(3, 0, 3, 0)
 fullLoadingFrame.Position = UDim2.new(-1, 0, -1, 0)
@@ -108,15 +105,11 @@ creditLabel.TextSize = 16
 creditLabel.TextXAlignment = Enum.TextXAlignment.Right
 creditLabel.ZIndex = 101
 
--- ==========================================
--- 📱 [NEW] 모바일 최적화 슬림 반응형 메인 UI 프레임
--- ==========================================
 local frame = Instance.new("Frame", gui)
--- 가로는 화면의 35%, 세로는 화면의 55%만 차지하여 오른쪽 구석에 콤팩트하게 밀착시킴 (제시어 가림 방지)
 frame.Size = UDim2.new(0.35, 0, 0.55, 0)
 frame.Position = UDim2.new(0.62, 0, 0.2, 0)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-frame.BackgroundTransparency = 0.15 -- 🌟 살짝 투명하게 만들어 뒤쪽 화면 식별 가능케 조절
+frame.BackgroundTransparency = 0.15 
 frame.Active = _T
 frame.Visible = false
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
@@ -298,9 +291,6 @@ task.delay(1.5, function()
     toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
 end)
 
--- ==========================================
--- 제시어 시스템 실시간 트래킹 루프
--- ==========================================
 local _lt = ""
 local function findSpectatorLabel()
     local pGui = _lp:FindFirstChildOfClass("PlayerGui")
