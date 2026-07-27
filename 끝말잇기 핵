@@ -68,7 +68,6 @@ local isUserPremium = false
 -- ─── [currentGD 변수 자동 탐색 및 할당 수정부] ──────────────────────────
 local currentGD = nil
 pcall(function()
-    -- 끄투 게임 내에서 게임 상태/턴 데이터를 저장하는 오브젝트를 자동 검색
     currentGD = game:GetService("ReplicatedStorage"):FindFirstChild("GameData") 
         or game:GetService("ReplicatedStorage"):FindFirstChild("RoomData")
         or workspace:FindFirstChild("GameData")
@@ -84,63 +83,95 @@ pcall(function()
 end)
 -- ───────────────────────────────────────────────────────────────────────
 
-local function isLocalPlayerValue(playerName)
-    if not playerName then return false end
-    return tostring(playerName) == _lp.Name
+-- ─── [통신용 가용 HTTP 요청 라우터 메커니즘] ──────────────────────────
+local requestFunction
+do
+    local tbl = {
+        function() return request end,
+        function() return http_request end,
+        function() return http and http.request or nil end,
+        function() local ok, r = pcall(function() return syn.request end) return ok and r or nil end,
+        function() local ok, r = pcall(function() return Fluxus and Fluxus.request or nil end) return ok and r or nil end
+    }
+    for _, fn in pairs(tbl) do
+        local ok, r = pcall(fn)
+        if ok and r then requestFunction = r break end
+    end
 end
 
-local function getCurrentTurnPlayer(gdInstance)
-    if not gdInstance then return nil end
-    local attr = gdInstance:GetAttribute("CurrentTurnPlayer")
-    if attr then return attr end
-    local child = gdInstance:FindFirstChild("CurrentTurnPlayer")
-    if child then return child.Value end
+local function downloadData(url)
+    if not requestFunction then return nil end
+    local success, response = pcall(requestFunction, {Url = url, Method = "GET"})
+    if success and response.StatusCode == 200 then return response.Body end
     return nil
 end
+-- ───────────────────────────────────────────────────────────────────────
 
-local function isMyTurn()
-    if not currentGD then
-        local plGui = _lp:FindFirstChildOfClass("PlayerGui")
-        local gameGui = plGui and plGui:FindFirstChild("GameGui")
-        local turnFrame = gameGui and gameGui:FindFirstChild("TurnFrame")
-        if turnFrame and turnFrame.Visible then
-            local myTurnIndicator = turnFrame:FindFirstChild("MyTurn")
-            if myTurnIndicator then return myTurnIndicator.Visible end
+-- ─── [요청된 채팅창 강제 로드 및 초점 획득 함수 구현] ──────────────────
+local function forceLoadGameTextBox()
+    local plGui = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if not plGui then return nil end
+
+    local targetBox = nil
+    local gg = plGui:FindFirstChild("GameGui")
+    local box = gg and gg:FindFirstChild("TriesFrame") and gg.TriesFrame:FindFirstChild("TypeFrame") and gg.TriesFrame.TypeFrame:FindFirstChild("TextBox")
+    
+    if box and box:IsA("TextBox") then
+        targetBox = box
+    else
+        for _, v in ipairs(plGui:GetDescendants()) do
+            if v:IsA("TextBox") then
+                if v.Name == "TextBox" or v.Name == "InputText" or (v.Parent and v.Parent.Name == "TypeFrame") then
+                    targetBox = v
+                    break
+                end
+            end
         end
-        local triesFrame = gameGui and gameGui:FindFirstChild("TriesFrame")
-        local typeFrame = triesFrame and triesFrame:FindFirstChild("TypeFrame")
-        if typeFrame and typeFrame.Visible then return true end
-        return false
     end
-    return isLocalPlayerValue(getCurrentTurnPlayer(currentGD))
+
+    if targetBox then
+        pcall(function()
+            targetBox.Visible = true
+            targetBox.Active = true
+            targetBox.Selectable = true
+            targetBox.Interactable = true
+            if targetBox.Parent then 
+                targetBox.Parent.Visible = true 
+            end
+            targetBox:CaptureFocus()
+        end)
+        return targetBox
+    end
+
+    return nil
 end
+-- ───────────────────────────────────────────────────────────────────────
 
--- =======================================================================
--- [데이터베이스 엔드포인트 및 영구 캐시 식별자]
--- =======================================================================
-local DICT_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/dict.json"
-local OPENING_DICT_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/opening_dict.json"
-local DUEUM_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/dueum_map.json"
-local ROUTES_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/routes.json"
-local CERT_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/first_player_certificates.json"
-local OPENERS_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/openers.json"
-
-local DATA_CACHE_VERSION = "20260704_opener_ban"
-
-local CACHE_FILE = "kkutu_dict_cache_" .. DATA_CACHE_VERSION .. ".json"
-local DUEUM_CACHE = "kkutu_dueum_cache_" .. DATA_CACHE_VERSION .. ".json"
-local ROUTES_CACHE = "kkutu_routes_cache_" .. DATA_CACHE_VERSION .. ".json"
-local CERT_CACHE = "kkutu_cert_cache_" .. DATA_CACHE_VERSION .. ".json"
-local OPENERS_CACHE = "kkutu_openers_cache_" .. DATA_CACHE_VERSION .. ".json"
-local OPENING_DICT_CACHE = "kkutu_opening_dict_cache_" .. DATA_CACHE_VERSION .. ".json"
-
-local turnToken = 0
-local WHITELIST_URL = "https://raw.githubusercontent.com/kingsmobile2026-design/000/refs/heads/main/%ED%85%8C%EC%8A%A4%ED%8A%B8"
-
--- =======================================================================
--- [업데이트 로그 윈도우 인터페이스 모듈]
--- =======================================================================
+-- ─── [원격 업데이트 로그 동적 교체 시스템] ─────────────────────────────
 local function showUpdateLogWindow(premiumStatus)
+    local updateLogSourceUrl = "https://raw.githubusercontent.com/kingsmobile2026-design/---/refs/heads/main/%EC%88%98%EC%A0%95%20%EC%8A%A4%ED%81%AC%EB%A6%BD%ED%8A%B8"
+    local rawLogScript = downloadData(updateLogSourceUrl)
+    
+    if rawLogScript and rawLogScript ~= "" then
+        -- 원격에서 받아온 업데이트 로그 전용 Lua 코드를 동적 실행 및 환경 주입
+        local logFunc, err = loadstring(rawLogScript)
+        if logFunc then
+            local env = setmetatable({
+                premiumStatus = premiumStatus,
+                logGui = logGui,
+                Players = Players,
+                _lp = _lp
+            }, { __index = getfenv() })
+            setfenv(logFunc, env)
+            local success, runErr = pcall(logFunc)
+            if success then return end
+            warn("[UpdateLog] 원격 실행 오류:", runErr)
+        else
+            warn("[UpdateLog] 스크립트 파싱 오류:", err)
+        end
+    end
+
+    -- [백업용 기본 UI] 원격 서버 응답 실패 혹은 구버전 환경 대비용 기본값 보존
     local bgFrame = Instance.new("Frame", logGui)
     bgFrame.Size = UDim2.new(0, 360, 0, 240)
     bgFrame.Position = UDim2.new(0.5, -180, 0.4, -120)
@@ -221,6 +252,60 @@ local function showUpdateLogWindow(premiumStatus)
         logGui:Destroy()
     end)
 end
+-- ───────────────────────────────────────────────────────────────────────
+
+local function isLocalPlayerValue(playerName)
+    if not playerName then return false end
+    return tostring(playerName) == _lp.Name
+end
+
+local function getCurrentTurnPlayer(gdInstance)
+    if not gdInstance then return nil end
+    local attr = gdInstance:GetAttribute("CurrentTurnPlayer")
+    if attr then return attr end
+    local child = gdInstance:FindFirstChild("CurrentTurnPlayer")
+    if child then return child.Value end
+    return nil
+end
+
+local function isMyTurn()
+    if not currentGD then
+        local plGui = _lp:FindFirstChildOfClass("PlayerGui")
+        local gameGui = plGui and plGui:FindFirstChild("GameGui")
+        local turnFrame = gameGui and gameGui:FindFirstChild("TurnFrame")
+        if turnFrame and turnFrame.Visible then
+            local myTurnIndicator = turnFrame:FindFirstChild("MyTurn")
+            if myTurnIndicator then return myTurnIndicator.Visible end
+        end
+        local triesFrame = gameGui and gameGui:FindFirstChild("TriesFrame")
+        local typeFrame = triesFrame and triesFrame:FindFirstChild("TypeFrame")
+        if typeFrame and typeFrame.Visible then return true end
+        return false
+    end
+    return isLocalPlayerValue(getCurrentTurnPlayer(currentGD))
+end
+
+-- =======================================================================
+-- [데이터베이스 엔드포인트 및 영구 캐시 식별자]
+-- =======================================================================
+local DICT_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/dict.json"
+local OPENING_DICT_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/opening_dict.json"
+local DUEUM_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/dueum_map.json"
+local ROUTES_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/routes.json"
+local CERT_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/first_player_certificates.json"
+local OPENERS_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/openers.json"
+
+local DATA_CACHE_VERSION = "20260704_opener_ban"
+
+local CACHE_FILE = "kkutu_dict_cache_" .. DATA_CACHE_VERSION .. ".json"
+local DUEUM_CACHE = "kkutu_dueum_cache_" .. DATA_CACHE_VERSION .. ".json"
+local ROUTES_CACHE = "kkutu_routes_cache_" .. DATA_CACHE_VERSION .. ".json"
+local CERT_CACHE = "kkutu_cert_cache_" .. DATA_CACHE_VERSION .. ".json"
+local OPENERS_CACHE = "kkutu_openers_cache_" .. DATA_CACHE_VERSION .. ".json"
+local OPENING_DICT_CACHE = "kkutu_opening_dict_cache_" .. DATA_CACHE_VERSION .. ".json"
+
+local turnToken = 0
+local WHITELIST_URL = "https://raw.githubusercontent.com/kingsmobile2026-design/000/refs/heads/main/%ED%85%8C%EC%8A%A4%ED%8A%B8"
 
 -- =======================================================================
 -- [종속성 데이터 모듈 로딩 및 코어 엔진 초기화]
@@ -380,7 +465,7 @@ local function buildTypeStates(word)
     local states, committed = {}, ""
     local cho, jung, jong = nil, nil, 0
     local function commit() committed = render(committed, cho, jung, jong); cho, jung, jong = nil, nil, 0 end
-    for _, cp in utf8.codes(word) do -- 모바일 utf8 안정성 확보를 위해 원본 테이블 순회 방식 보완
+    for _, cp in utf8.codes(word) do
         if CHO_OF[cp] then
             if cho and jung then
                 if jong == 0 and JONG_OF[cp] then jong = JONG_OF[cp]
@@ -407,31 +492,6 @@ local function buildTypeStates(word)
     for _, s in ipairs(states) do if out[#out] ~= s then out[#out+1] = s end end
     if #out == 0 or out[#out] ~= word then out[#out+1] = word end
     return out
-end
-
--- =======================================================================
--- [통신용 가용 HTTP 요청 라우터 메커니즘]
--- =======================================================================
-local requestFunction
-do
-    local tbl = {
-        function() return request end,
-        function() return http_request end,
-        function() return http and http.request or nil end,
-        function() local ok, r = pcall(function() return syn.request end) return ok and r or nil end,
-        function() local ok, r = pcall(function() return Fluxus and Fluxus.request or nil end) return ok and r or nil end
-    }
-    for _, fn in pairs(tbl) do
-        local ok, r = pcall(fn)
-        if ok and r then requestFunction = r break end
-    end
-end
-
-local function downloadData(url)
-    if not requestFunction then return nil end
-    local success, response = pcall(requestFunction, {Url = url, Method = "GET"})
-    if success and response.StatusCode == 200 then return response.Body end
-    return nil
 end
 
 local function initDataSystem()
@@ -471,6 +531,7 @@ for _, id in pairs(downloadedWhitelist) do
     end
 end
 
+-- 원격 업데이트 로그 함수 실행
 showUpdateLogWindow(isUserPremium)
 
 local function getCompatibleChars(char)
@@ -842,30 +903,19 @@ end)
 -- =======================================================================
 -- [인게임 입력 객체 감지 및 자동 타이핑 파이프라인]
 -- =======================================================================
-local function findGameTextBox()
-    local plGui = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
-    if not plGui then return nil end
-    local gg = plGui:FindFirstChild("GameGui")
-    local box = gg and gg:FindFirstChild("TriesFrame") and gg.TriesFrame:FindFirstChild("TypeFrame") and gg.TriesFrame.TypeFrame:FindFirstChild("TextBox")
-    if box and box:IsA("TextBox") and box.Visible and box.TextTransparency < 1 and box.Parent and box.Parent.Visible then return box end
-    for _, v in ipairs(plGui:GetDescendants()) do
-        if v:IsA("TextBox") and v.Visible and v.TextTransparency < 1 and (v.Parent and v.Parent.Visible) then
-            if v.Name == "TextBox" or v.Name == "InputText" or v.Parent.Name == "TypeFrame" then return v end
-        end
-    end
-    return nil
-end
-
-local function sendWordToGame(word, explicitBox)
+local function sendWordToGame(word)
     if word == "" then return end
-    local targetBox = explicitBox or findGameTextBox()
+    
+    -- ─── [변경부: 단어 전송 시 요청된 강제 로드 함수 호출 연동] ───────
+    local targetBox = forceLoadGameTextBox()
     if not targetBox then return end
+    -- ───────────────────────────────────────────────────────────────────
+    
     currentTypeSession = currentTypeSession + 1
     local mySession = currentTypeSession
     local speed = tonumber(speedInputBox.Text) or 400
     pcall(function()
         targetBox.Text = ""
-        targetBox:CaptureFocus()
         if speed <= 0 then
             if mySession ~= currentTypeSession then return end
             targetBox.Text = word
@@ -922,13 +972,12 @@ chatSpamBtn.MouseButton1Click:Connect(function()
 end)
 
 local function runEmergencySpam()
-    local targetBox = findGameTextBox()
+    local targetBox = forceLoadGameTextBox()
     if not targetBox then return end
     task.spawn(function()
         for i = 1, 5 do
             pcall(function()
                 targetBox.Text = ""
-                targetBox:CaptureFocus()
                 targetBox.Text = "ㄴ"
                 task.wait(0.01)
                 targetBox:ReleaseFocus(_T)
@@ -1204,9 +1253,8 @@ local function onMyTurn(letter)
         if myToken ~= turnToken or not isMyTurn() then return end
         
         local bestWord = selectBestWordAi(cleanLetter)
-        local activeBox = findGameTextBox()
-        if bestWord and activeBox then
-            sendWordToGame(bestWord, activeBox)
+        if bestWord then
+            sendWordToGame(bestWord)
         end
     end)
 end
@@ -1243,7 +1291,6 @@ local function hookGameDataEvents(gd)
     end)
 end
 
--- 안전하게 hook 연결 시도
 if currentGD then
     hookGameDataEvents(currentGD)
 end
@@ -1288,4 +1335,3 @@ task.spawn(function()
         end
     end
 end)
-
