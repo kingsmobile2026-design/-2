@@ -963,16 +963,28 @@ local function createWordElement(w, orderScore, overrideHideNonPremium)
             lbl.LayoutOrder = orderScore + 10000
         elseif checkIsChobanWord(w) then
             lbl.BackgroundColor3 = Color3.fromRGB(25, 60, 90)
-            lbl.Text = " ⚡ [추천] " .. w
+            lbl.Text = " ⚡ [방어] " .. w
             lbl.TextColor3 = Color3.fromRGB(150, 220, 255)
             lbl.LayoutOrder = orderScore + 20000
         else
             lbl.BackgroundColor3 = Color3.fromRGB(40, 42, 48)
-            lbl.Text = " 🛡 [방어] " .. w
+            lbl.Text = " 📄 [일반] " .. w
             lbl.TextColor3 = Color3.fromRGB(200, 200, 200)
             lbl.LayoutOrder = orderScore + 30000
         end
-    
+    else
+        lbl.BackgroundColor3 = Color3.fromRGB(40, 42, 48)
+        lbl.Text = " 📄 " .. w
+        lbl.TextColor3 = Color3.fromRGB(190, 190, 190)
+        lbl.LayoutOrder = orderScore
+    end
+
+    lbl.MouseButton1Click:Connect(function()
+        sendWordToGame(w)
+    end)
+    return lbl
+end
+
 -- =======================================================================
 -- [의사결정 보조 AI 단어 지능형 선별 알고리즘]
 -- =======================================================================
