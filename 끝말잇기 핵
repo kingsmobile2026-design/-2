@@ -64,7 +64,25 @@ local logGui = targetGuiParent:WaitForChild("LogGui", 5) or Instance.new("Screen
 local WHITELIST_CACHE = "kkutu_whitelist_cache.json"
 local downloadedWhitelist = {}
 local isUserPremium = false
+
+-- ─── [currentGD 변수 자동 탐색 및 할당 수정부] ──────────────────────────
 local currentGD = nil
+pcall(function()
+    -- 끄투 게임 내에서 게임 상태/턴 데이터를 저장하는 오브젝트를 자동 검색
+    currentGD = game:GetService("ReplicatedStorage"):FindFirstChild("GameData") 
+        or game:GetService("ReplicatedStorage"):FindFirstChild("RoomData")
+        or workspace:FindFirstChild("GameData")
+    
+    if not currentGD then
+        for _, v in ipairs(game:GetService("ReplicatedStorage"):GetChildren()) do
+            if v:GetAttribute("CurrentTurnPlayer") ~= nil or v:GetAttribute("StartingLetter") ~= nil then
+                currentGD = v
+                break
+            end
+        end
+    end
+end)
+-- ───────────────────────────────────────────────────────────────────────
 
 local function isLocalPlayerValue(playerName)
     if not playerName then return false end
@@ -362,7 +380,7 @@ local function buildTypeStates(word)
     local states, committed = {}, ""
     local cho, jung, jong = nil, nil, 0
     local function commit() committed = render(committed, cho, jung, jong); cho, jung, jong = nil, nil, 0 end
-    for _, cp in ipairs(keys) do
+    for _, cp in utf8.codes(word) do -- 모바일 utf8 안정성 확보를 위해 원본 테이블 순회 방식 보완
         if CHO_OF[cp] then
             if cho and jung then
                 if jong == 0 and JONG_OF[cp] then jong = JONG_OF[cp]
@@ -889,7 +907,7 @@ chatSpamBtn.MouseButton1Click:Connect(function()
                 local currentChannel = textChatService.ChatInputBarConfiguration.TargetTextChannel
                 if currentChannel then
                     currentChannel:SendAsync(msg)
-                    sent = true
+                    sent = sent or true
                 end
             end
             if not sent then
@@ -1194,14 +1212,13 @@ local function onMyTurn(letter)
 end
 
 -- =======================================================================
--- [이미지 업로드 스크린샷 1153~1195행 실시간 턴 감지 로직부 동화]
+-- [실시간 턴 감지 로직부 동화 및 안전장치 결합]
 -- =======================================================================
 local function hookGameDataEvents(gd)
     if not gd then return end
     
     local function onCurrentTurnPlayerChanged()
         local cur = getCurrentTurnPlayer(gd)
-        
         local startingLetter = getStartingLetter(gd)
         FirstTurnManager.resetToFirstTurn(startingLetter)
         
@@ -1226,6 +1243,7 @@ local function hookGameDataEvents(gd)
     end)
 end
 
+-- 안전하게 hook 연결 시도
 if currentGD then
     hookGameDataEvents(currentGD)
 end
@@ -1242,6 +1260,7 @@ else
     end
 end
 
+-- ─── [UI 관측 백업 루프 (currentGD 누락 시에도 무조건 보장)] ──────────
 task.spawn(function()
     while task.wait(0.15) do
         local targetLabel = findSpectatorLabel()
@@ -1269,3 +1288,4 @@ task.spawn(function()
         end
     end
 end)
+
