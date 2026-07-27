@@ -66,8 +66,34 @@ local downloadedWhitelist = {}
 local isUserPremium = false
 local currentGD = nil
 
+local function isLocalPlayerValue(playerName)
+    if not playerName then return false end
+    return tostring(playerName) == _lp.Name
+end
+
+local function getCurrentTurnPlayer(gdInstance)
+    if not gdInstance then return nil end
+    local attr = gdInstance:GetAttribute("CurrentTurnPlayer")
+    if attr then return attr end
+    local child = gdInstance:FindFirstChild("CurrentTurnPlayer")
+    if child then return child.Value end
+    return nil
+end
+
 local function isMyTurn()
-    if not currentGD then return false end
+    if not currentGD then
+        local plGui = _lp:FindFirstChildOfClass("PlayerGui")
+        local gameGui = plGui and plGui:FindFirstChild("GameGui")
+        local turnFrame = gameGui and gameGui:FindFirstChild("TurnFrame")
+        if turnFrame and turnFrame.Visible then
+            local myTurnIndicator = turnFrame:FindFirstChild("MyTurn")
+            if myTurnIndicator then return myTurnIndicator.Visible end
+        end
+        local triesFrame = gameGui and gameGui:FindFirstChild("TriesFrame")
+        local typeFrame = triesFrame and triesFrame:FindFirstChild("TypeFrame")
+        if typeFrame and typeFrame.Visible then return true end
+        return false
+    end
     return isLocalPlayerValue(getCurrentTurnPlayer(currentGD))
 end
 
@@ -838,7 +864,6 @@ local function sendWordToGame(word, explicitBox)
         task.wait(0.01)
         targetBox:ReleaseFocus(_T)
         
-        -- [연동] 단어가 정상 전송되었으므로 첫 턴 제한 상태 해제
         FirstTurnManager.onWordAccepted(word)
         
         if antiCheatActive and isUserPremium then
@@ -977,7 +1002,6 @@ local function selectBestWordAi(char)
         if wLen >= 6 then
             table.insert(tier1, w)
         elseif checkIsKillWord(w) then
-            -- [연동] 첫 턴이고 한방 단어 방지가 활성화되어 있다면 한방 티어에서 제외
             if not FirstTurnManager.shouldAvoidOneShot(false) then
                 table.insert(tier2, w)
             else
@@ -1133,7 +1157,14 @@ local function findTurnTime()
 end
 
 local function getStartingLetter(gameDataInstance)
-    if not gameDataInstance then return "" end
+    if not gameDataInstance then
+        local label = findSpectatorLabel()
+        if label then
+            local matched = string.match(label.Text, "'(.-)'") or string.match(label.Text, '"(.-)"')
+            if matched then return matched end
+        end
+        return ""
+    end
     local letter = gameDataInstance:GetAttribute("StartingLetter") or gameDataInstance:GetAttribute("Letter")
     if not letter or letter == "" then
         local label = findSpectatorLabel()
@@ -1168,12 +1199,9 @@ end
 local function hookGameDataEvents(gd)
     if not gd then return end
     
-    -- 속성 및 값 변경 이벤트 핸들러 바인딩
     local function onCurrentTurnPlayerChanged()
-        -- 턴 토큰을 증가시켜 이전 턴에 돌던 비동기 타스크(딜레이 스레드)를 무효화
-        local cur = gd:GetAttribute("CurrentTurnPlayer") or (gd:FindFirstChild("CurrentTurnPlayer") and gd.CurrentTurnPlayer.Value)
+        local cur = getCurrentTurnPlayer(gd)
         
-        -- [연동] 새로운 사람에게 턴이 넘어갔으므로 매 라운드 첫 턴 검증 리셋
         local startingLetter = getStartingLetter(gd)
         FirstTurnManager.resetToFirstTurn(startingLetter)
         
@@ -1202,21 +1230,18 @@ if currentGD then
     hookGameDataEvents(currentGD)
 end
 
--- 턴 토큰을 증가시켜 이전 턴에 돌던 비동기 타스크(딜레이 스레드)를 무효화
 if not isMyTurn() then
     turnToken = turnToken + 1
 end
 
--- 현재 턴 플레이어가 나(로컬 플레이어)인지 확인
 if isMyTurn() then
-    onMyTurn(getStartingLetter(currentGD)) -- 내 턴일 때 실행할 함수 호출
+    onMyTurn(getStartingLetter(currentGD))
 else
     if frame.Visible then
         title.Text = " 탐색 중..."
     end
 end
 
--- 관전(Spectator) 라벨이나 텍스트 변화를 감지하는 예비 루프 스레드 유지
 task.spawn(function()
     while task.wait(0.15) do
         local targetLabel = findSpectatorLabel()
