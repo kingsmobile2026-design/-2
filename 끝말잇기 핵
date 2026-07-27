@@ -1,10 +1,3 @@
-local Players = game:GetService("Players")
-local _lp = Players.LocalPlayer
-local targetGuiParent = _lp:WaitForChild("PlayerGui")
--- WHITELIST_CACHE 경로 지정
-local WHITELIST_CACHE = "kkutu_whitelist_cache.json" 
-local downloadedWhitelist = {}
-
 -- =======================================================================
 -- [첫 턴 감지 및 관리 시스템 통합본]
 -- =======================================================================
@@ -15,36 +8,27 @@ FirstTurnManager.roundFirstTurn = true   -- 현재 라운드가 첫 턴인지 �
 FirstTurnManager.roundStartLetter = nil  -- 라운드가 시작될 때의 첫 제시어
 
 -- ─── [의존성 헬퍼 함수] ──────────────────────────────────────────────
--- 두 글자가 두음법칙 등을 고려하여 서로 호환되는지 판별 (원래 코드 기준)
 local function lettersCompatible(a, b)
     if type(a) ~= "string" or type(b) ~= "string" or a == "" or b == "" then return false end
-    -- 본래 스크립트의 syllableKeys/DUEUM 구조를 기반으로 작동함
-    -- 여기서는 단순화를 위해 기본 문자열 비교를 수행하며, 실제 적용 시 기존 syllableKeys 함수를 활용하세요.
     return a == b
 end
 
--- 단어의 첫 음절(3바이트) 추출
 local function firstSyllable(text)
     if type(text) ~= "string" or #text < 3 then return tostring(text or "") end
     return text:sub(1, 3)
 end
 
 -- ─── [핵심 기능 함수들] ──────────────────────────────────────────────
-
---- 1. 현재 첫 턴 상태이거나 한방 단어를 방지해야 하는 상황인지 판별
 function FirstTurnManager.shouldAvoidOneShot(bAvoidOneShotWordsSetting)
-    -- 외부 설정(한방 방지 옵션)이 켜져 있거나, '현재가 첫 턴' 상태라면 true를 반환
     return bAvoidOneShotWordsSetting or FirstTurnManager.roundFirstTurn
 end
 
---- 2. 새로운 라운드/목숨 세션이 시작되어 첫 턴 상태로 리셋
 function FirstTurnManager.resetToFirstTurn(startingLetter)
     FirstTurnManager.roundFirstTurn = true
     FirstTurnManager.roundStartLetter = startingLetter
     print("[FirstTurn] 라운드가 첫 턴 상태로 리셋되었습니다. 제시어:", startingLetter)
 end
 
---- 3. 단어가 성공적으로 제출되었을 때 호출하여 첫 턴 상태를 해제
 function FirstTurnManager.onWordAccepted(word)
     if FirstTurnManager.roundFirstTurn then
         FirstTurnManager.roundFirstTurn = false
@@ -52,43 +36,44 @@ function FirstTurnManager.onWordAccepted(word)
     end
 end
 
---- 4. 특정 단어 패킷이 들어왔을 때, 이것이 진짜 이번 첫 턴에 유효한 단어인지 판별
 function FirstTurnManager.isCurrentRoundWordPayload(word, currentStartingLetter)
-    -- 이미 진행 중인 라운드라면 무조건 유효(true)로 판정
     if not FirstTurnManager.roundFirstTurn then return true end
     
     local letter = currentStartingLetter or FirstTurnManager.roundStartLetter
     if not letter then return true end
     
-    -- 단어의 첫 글자가 현재 제시어와 일치하는지 감지
     if lettersCompatible(firstSyllable(word), letter) then return true end
-    
-    -- 서버 패킷 레이스로 인해 제시어가 이미 바뀐 경우, 단어의 끝 글자가 제시어와 호환되는지 감지
     return lettersCompatible(word:sub(-3), letter)
 end
 
---- 5. 서버 거부 메시지를 분석하여 '첫 턴 한방 제한'에 걸린 것인지 감지
 function FirstTurnManager.isFirstTurnOneShotText(serverReasonText)
     if type(serverReasonText) ~= "string" then return false end
-    
-    -- 서버 에러 문구에 "첫 턴"과 "한방"이 모두 포함되어 있는지 판별
     local hasFirstTurn = string.find(serverReasonText, "첫 턴", 1, true) ~= nil
     local hasOneShot = string.find(serverReasonText, "한방", 1, true) ~= nil
-    
     return hasFirstTurn and hasOneShot
 end
 
+-- =======================================================================
+-- [기본 환경 선언 및 프리미엄 화이트리스트 검증 메커니즘]
+-- =======================================================================
+local Players = game:GetService("Players")
+local _lp = Players.LocalPlayer
+local targetGuiParent = _lp:WaitForChild("PlayerGui")
+local logGui = targetGuiParent:WaitForChild("LogGui", 5) or Instance.new("ScreenGui", targetGuiParent)
 
--- =======================================================================
--- [원본 치트 스크립트 메인 엔진 시작]
--- =======================================================================
+local WHITELIST_CACHE = "kkutu_whitelist_cache.json"
+local downloadedWhitelist = {}
+local isUserPremium = false
+local currentGD = nil
 
 local function isMyTurn()
-if not currentGD then return false end
--- CurrentTurnPlayer의 값이 내 Name 혹은 LP(LocalPlayer) 인스턴스와 일치하는지 판별
-return isLocalPlayerValue(getCurrentTurnPlayer(currentGD))
+    if not currentGD then return false end
+    return isLocalPlayerValue(getCurrentTurnPlayer(currentGD))
 end
 
+-- =======================================================================
+-- [데이터베이스 엔드포인트 및 영구 캐시 식별자]
+-- =======================================================================
 local DICT_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/dict.json"
 local OPENING_DICT_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/opening_dict.json"
 local DUEUM_URL = "https://gist.githubusercontent.com/GUMI2029/a98de0291fe638cc37bd6125edc71aac/raw/dueum_map.json"
@@ -106,97 +91,101 @@ local OPENERS_CACHE = "kkutu_openers_cache_" .. DATA_CACHE_VERSION .. ".json"
 local OPENING_DICT_CACHE = "kkutu_opening_dict_cache_" .. DATA_CACHE_VERSION .. ".json"
 
 local turnToken = 0
-
 local WHITELIST_URL = "https://raw.githubusercontent.com/kingsmobile2026-design/000/refs/heads/main/%ED%85%8C%EC%8A%A4%ED%8A%B8"
 
-local bgFrame = Instance.new("Frame", logGui)
-bgFrame.Size = UDim2.new(0, 360, 0, 240)
-bgFrame.Position = UDim2.new(0.5, -180, 0.4, -120)
-bgFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-bgFrame.BorderSizePixel = 0
-bgFrame.Active = true
-bgFrame.Draggable = true
-Instance.new("UICorner", bgFrame).CornerRadius = UDim.new(0, 8)
+-- =======================================================================
+-- [업데이트 로그 윈도우 인터페이스 모듈]
+-- =======================================================================
+local function showUpdateLogWindow(premiumStatus)
+    local bgFrame = Instance.new("Frame", logGui)
+    bgFrame.Size = UDim2.new(0, 360, 0, 240)
+    bgFrame.Position = UDim2.new(0.5, -180, 0.4, -120)
+    bgFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    bgFrame.BorderSizePixel = 0
+    bgFrame.Active = true
+    bgFrame.Draggable = true
+    Instance.new("UICorner", bgFrame).CornerRadius = UDim.new(0, 8)
 
-local titleLabel = Instance.new("TextLabel", bgFrame)
-titleLabel.Size = UDim2.new(1, 0, 0, 40)
-titleLabel.Position = UDim2.new(0, 0, 0, 10)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "Upd log"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.TextSize = 22
+    local titleLabel = Instance.new("TextLabel", bgFrame)
+    titleLabel.Size = UDim2.new(1, 0, 0, 40)
+    titleLabel.Position = UDim2.new(0, 0, 0, 10)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "Upd log"
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 22
 
-local statusLabel = Instance.new("TextLabel", bgFrame)
-statusLabel.Size = UDim2.new(1, -20, 0, 30)
-statusLabel.Position = UDim2.new(0, 10, 0, 50)
-statusLabel.BackgroundTransparency = 1
-statusLabel.Font = Enum.Font.SourceSansBold
-statusLabel.TextSize = 14
+    local statusLabel = Instance.new("TextLabel", bgFrame)
+    statusLabel.Size = UDim2.new(1, -20, 0, 30)
+    statusLabel.Position = UDim2.new(0, 10, 0, 50)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Font = Enum.Font.SourceSansBold
+    statusLabel.TextSize = 14
 
-if isPremium then
-statusLabel.Text = "당신은 프리미엄 유저 입니다"
-statusLabel.TextColor3 = Color3.fromRGB(0, 255, 140)
-else
-statusLabel.Text = "당신은 프리미엄에 등록되지 않았습니다 (기능 제한됨)"
-statusLabel.TextColor3 = Color3.fromRGB(255, 75, 75)
+    if premiumStatus then
+        statusLabel.Text = "당신은 프리미엄 유저 입니다"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 140)
+    else
+        statusLabel.Text = "당신은 프리미엄에 등록되지 않았습니다 (기능 제한됨)"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 75, 75)
+    end
+
+    local line = Instance.new("Frame", bgFrame)
+    line.Size = UDim2.new(1, -40, 0, 1)
+    line.Position = UDim2.new(0, 20, 0, 85)
+    line.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    line.BorderSizePixel = 0
+
+    local contentFrame = Instance.new("Frame", bgFrame)
+    contentFrame.Size = UDim2.new(1, -40, 0, 100)
+    contentFrame.Position = UDim2.new(0, 20, 0, 95)
+    contentFrame.BackgroundTransparency = 1
+
+    local info1 = Instance.new("TextLabel", contentFrame)
+    info1.Size = UDim2.new(1, 0, 0, 20)
+    info1.Position = UDim2.new(0, 0, 0, 5)
+    info1.BackgroundTransparency = 1
+    info1.Text = "+ 프리미엄 도입 및 권한 개편"
+    info1.TextColor3 = Color3.fromRGB(220, 220, 220)
+    info1.Font = Enum.Font.SourceSansBold
+    info1.TextSize = 12
+    info1.TextXAlignment = Enum.TextXAlignment.Left
+
+    local info2 = Instance.new("TextLabel", contentFrame)
+    info2.Size = UDim2.new(1, 0, 0, 50)
+    info2.Position = UDim2.new(0, 0, 0, 25)
+    info2.BackgroundTransparency = 1
+    info2.Text = "+ 프리미엄 전용: 단어 개수 100% 노출 및 분류 제공\n+ 프리미엄 전용: 안티 밴 및 봇 AI 기능 활성화\n(미등록 유저는 검색 단어 50% 제한 및 AI 차단)"
+    info2.TextColor3 = Color3.fromRGB(160, 160, 170)
+    info2.Font = Enum.Font.SourceSans
+    info2.TextSize = 11
+    info2.TextWrapped = true
+    info2.TextXAlignment = Enum.TextXAlignment.Left
+    info2.TextYAlignment = Enum.TextYAlignment.Top
+
+    local closeBtn = Instance.new("TextButton", bgFrame)
+    closeBtn.Size = UDim2.new(0, 100, 0, 30)
+    closeBtn.Position = UDim2.new(0.5, -50, 1, -45)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    closeBtn.Text = "확인"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.Font = Enum.Font.SourceSansBold
+    closeBtn.TextSize = 12
+    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 4)
+
+    closeBtn.MouseButton1Click:Connect(function()
+        logGui:Destroy()
+    end)
 end
 
-local line = Instance.new("Frame", bgFrame)
-line.Size = UDim2.new(1, -40, 0, 1)
-line.Position = UDim2.new(0, 20, 0, 85)
-line.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-line.BorderSizePixel = 0
-
-local contentFrame = Instance.new("Frame", bgFrame)
-contentFrame.Size = UDim2.new(1, -40, 0, 100)
-contentFrame.Position = UDim2.new(0, 20, 0, 95)
-contentFrame.BackgroundTransparency = 1
-
-local info1 = Instance.new("TextLabel", contentFrame)
-info1.Size = UDim2.new(1, 0, 0, 20)
-info1.Position = UDim2.new(0, 0, 0, 5)
-info1.BackgroundTransparency = 1
-info1.Text = "+ 프리미엄 도입 및 권한 개편"
-info1.TextColor3 = Color3.fromRGB(220, 220, 220)
-info1.Font = Enum.Font.SourceSansBold
-info1.TextSize = 12
-info1.TextXAlignment = Enum.TextXAlignment.Left
-
-local info2 = Instance.new("TextLabel", contentFrame)
-info2.Size = UDim2.new(1, 0, 0, 50)
-info2.Position = UDim2.new(0, 0, 0, 25)
-info2.BackgroundTransparency = 1
-info2.Text = "+ 프리미엄 전용: 단어 개수 100% 노출 및 분류 제공\n+ 프리미엄 전용: 안티 밴 및 봇 AI 기능 활성화\n(미등록 유저는 검색 단어 50% 제한 및 AI 차단)"
-info2.TextColor3 = Color3.fromRGB(160, 160, 170)
-info2.Font = Enum.Font.SourceSans
-info2.TextSize = 11
-info2.TextWrapped = true
-info2.TextXAlignment = Enum.TextXAlignment.Left
-info2.TextYAlignment = Enum.TextYAlignment.Top
-
-local closeBtn = Instance.new("TextButton", bgFrame)
-closeBtn.Size = UDim2.new(0, 100, 0, 30)
-closeBtn.Position = UDim2.new(0.5, -50, 1, -45)
-closeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-closeBtn.Text = "확인"
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.Font = Enum.Font.SourceSansBold
-closeBtn.TextSize = 12
-Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 4)
-
-closeBtn.MouseButton1Click:Connect(function()
-logGui:Destroy()
-end)
-end
-
-showUpdateLogWindow(isUserPremium)
-
+-- =======================================================================
+-- [종속성 데이터 모듈 로딩 및 코어 엔진 초기화]
+-- =======================================================================
 local _cg = targetGuiParent
 local _T = not not (1 == 1)
 
 if _cg:FindFirstChild("CustomWordFinderGui") then
-_cg["CustomWordFinderGui"]:Destroy()
+    _cg["CustomWordFinderGui"]:Destroy()
 end
 
 local HS = game:GetService("HttpService")
@@ -210,31 +199,31 @@ local OPENERS = {}
 local OPENING_DICT = {}
 
 local function checkIsPlatformPC()
-return (not UIS.TouchEnabled) and UIS.KeyboardEnabled
+    return (not UIS.TouchEnabled) and UIS.KeyboardEnabled
 end
 
 local isPC = checkIsPlatformPC()
 local uiScale = isPC and 1.6 or 1.0
 
 local specialWords = {
-"륨", "늄", "듐", "튬", "슘", "귬", "윰", "긋", "뜯", "쁨", "끔", "쯤", "쿰", "뮴",
-"펌", "폼", "푼", "빔", "밈", "짐", "릭", "픽", "닉", "킥", "벡", "택", "렉", "큭",
-"쿡", "툭", "잼", "젬", "짬", "렁", "룽", "융", "꾹", "즉", "쾅", "뮴", "퓸", "븀",
-"톤", "쨤", "윕", "녘", "꾹", "즉", "쾅", "쨔", "긶", "돓", "듸"
+    "륨", "늄", "듐", "튬", "슘", "귬", "윰", "긋", "뜯", "쁨", "끔", "쯤", "쿰", "뮴",
+    "펌", "폼", "푼", "빔", "밈", "짐", "릭", "픽", "닉", "킥", "벡", "택", "렉", "큭",
+    "쿡", "툭", "잼", "젬", "짬", "렁", "룽", "융", "꾹", "즉", "쾅", "뮴", "퓸", "븀",
+    "톤", "쨤", "윕", "녘", "꾹", "즉", "쾅", "쨔", "긶", "돓", "듸"
 }
 
 local EndingKillLetters = {}
 for _, v in ipairs(specialWords) do EndingKillLetters[v] = true end
 
 local CustomKillLetters = {
-["륨"] = true, ["늄"] = true, ["뮴"] = true, ["튬"] = true, ["킷"] = true,
-["꾼"] = true, ["녘"] = true, ["렆"] = true, ["졈"] = true, ["꾼"] = true,
-["젶"] = true, ["팎"] = true
+    ["륨"] = true, ["늄"] = true, ["뮴"] = true, ["튬"] = true, ["킷"] = true,
+    ["꾼"] = true, ["녘"] = true, ["렆"] = true, ["졈"] = true, ["꾼"] = true,
+    ["젶"] = true, ["팎"] = true
 }
 
 local ChobanEndingLetters = {
-["람"] = true, ["남"] = true, ["응"] = true, ["음"] = true, ["드"] = true, ["브"] = true,
-["클"] = true, ["늘"] = true, ["글"] = true, ["들"] = true, ["잘"] = true, ["날"] = true, ["름"] = true
+    ["람"] = true, ["남"] = true, ["응"] = true, ["음"] = true, ["드"] = true, ["브"] = true,
+    ["클"] = true, ["늘"] = true, ["글"] = true, ["들"] = true, ["잘"] = true, ["날"] = true, ["름"] = true
 }
 
 local TargetJongseiIndex = { [23] = true, [24] = true, [25] = true, [26] = true, [27] = true }
@@ -244,48 +233,51 @@ local AllowedYaChoseong = { [0] = true, [3] = true, [2] = true, [5] = true, [6] 
 local DoubleChoseongIndex = { [1] = true, [4] = true, [8] = true, [10] = true, [13] = true }
 
 local function checkIsKillWord(word)
-if word == "" then return false end
-local successOffset, offset = pcall(function() return utf8.offset(word, utf8.len(word)) end)
-if not successOffset or not offset then return false end
-local lastChar = string.sub(word, offset)
-if EndingKillLetters[lastChar] or CustomKillLetters[lastChar] then return true end
-local code = utf8.codepoint(lastChar)
-if code >= 0xAC00 and code <= 0xD7A3 then
-local hangulIndex = code - 0xAC00
-local jongsei = hangulIndex % 28
-local jungseong = math.floor((hangulIndex % 588) / 28)
-local choseong = math.floor(hangulIndex / 588)
-if DoubleChoseongIndex[choseong] and jongsei > 0 then return true end
-if DoubleJongseiIndex[jongsei] or TargetJongseiIndex[jongsei] then return true end
-if jungseong == 13 or jungseong == 9 then return true end
-if jungseong == 6 and AllowedYeoChoseong[choseong] then return true end
-if jungseong == 2 and AllowedYaChoseong[choseong] then return true end
-end
-return false
+    if word == "" then return false end
+    local successOffset, offset = pcall(function() return utf8.offset(word, utf8.len(word)) end)
+    if not successOffset or not offset then return false end
+    local lastChar = string.sub(word, offset)
+    if EndingKillLetters[lastChar] or CustomKillLetters[lastChar] then return true end
+    local code = utf8.codepoint(lastChar)
+    if code >= 0xAC00 and code <= 0xD7A3 then
+        local hangulIndex = code - 0xAC00
+        local jongsei = hangulIndex % 28
+        local jungseong = math.floor((hangulIndex % 588) / 28)
+        local choseong = math.floor(hangulIndex / 588)
+        if DoubleChoseongIndex[choseong] and jongsei > 0 then return true end
+        if DoubleJongseiIndex[jongsei] or TargetJongseiIndex[jongsei] then return true end
+        if jungseong == 13 or jungseong == 9 then return true end
+        if jungseong == 6 and AllowedYeoChoseong[choseong] then return true end
+        if jungseong == 2 and AllowedYaChoseong[choseong] then return true end
+    end
+    return false
 end
 
 local function checkIsChobanWord(word)
-if word == "" then return false end
-local successOffset, offset = pcall(function() return utf8.offset(word, utf8.len(word)) end)
-if not successOffset or not offset then return false end
-local lastChar = string.sub(word, offset)
-return ChobanEndingLetters[lastChar] or false
+    if word == "" then return false end
+    local successOffset, offset = pcall(function() return utf8.offset(word, utf8.len(word)) end)
+    if not successOffset or not offset then return false end
+    local lastChar = string.sub(word, offset)
+    return ChobanEndingLetters[lastChar] or false
 end
 
 local WordDB = {
-"두듥", "두렫", "켓등", "류턴블폼튬", "도린꼍", "뎌춍", "됴셕", "라선형턴넬", 
-"라렐", "디스프로슘", "등졍", "등뎨", "구냬", "구듫", "그늫", "나준녘", "노르넨", "노붐오르가늄", "니맣", "등츩", "등쨈", "뎌져", "고쇠믓", "산슳", "가래틋", "시틋", "님잫", "벳꽃", "귀틤", "름육", "다툼", "다쁘", "믈집", "름호", "가시섶", "뎡강모디", "꾼둑꾼둑", "둑슨", "슨몽", "몽생미셸", "셸륵", "락톤", "긧고", "귓발", "긔딪", "슷바닥", "믜신것", "늡렬", "늡늡", "귿곻", "남긧버슷", "톄언문", "롱어", "즘즉", "다름슈타튬", "나이오븀", "로듐", "레늄", "엇비슷", "낭자", "장징궈", "스트론튬", "벳살", "당구솣", "뎡그당", "피토크로뮴", "가슝", "나랗", "가듁", "듁순", "늬굽", "듸레", "쨔다", "장구매듭", "시긔", "읏듬", "지르코늄", "욹은불근", "낏내", "욹다", "시욹", "차마륨", "차풰", "왕듸", "믈라카", "살갗", "차이쨔", "윕쌀", "냥쭝", "내뎡", "긿다", "프랑슘", "곰븨님븨", "가린긿", "다른", "역스윕", "돌꿴", "인듐", "옌청", "름연", "마긶", "자이로파일럿", "식물무늬", "방틀무늬", "방듸", "전녆", "대숳", "믈뎜", 
-"이렁셩", "돌꼇", "성심성의껏", "정성껏", "다롄", "가랒", "나잇값", "선곬", "질그릇", "균핵균", "신시튬", "잎자욱", "치읓", "히엗", "피읖", "디귿", "치마긶", "늣치", "늣하르방", "봇둑", "기뇰", "내곬", "사뿐", "나트륨", "다이디뮴", "표고버섯", "가측값", "대감굿", "뭄푸레", "발가울넠", "윰차", "윰라대왕", "시보귬", "기동돓", "굽굽", "자릿값", "차죵", "다박나룻", "쨔지다", "뭄바이", "트레이닝", "갸름컁컁", "겨욹", "거믜", "거먕", "고농축우라늄", "구읫잫", "구연산철암모늄", "규산마그네슘", "규산알루미늄", "그릇그릇", "그듸", "그랑기뇰", "너븨", "노멀라이제이션", "누괵", "누드룩", "뉴메틱케이슨", "뉴페인팅", "느븨", "느른", "씀바귀", "는곱", "겍자", "슨상", "체겍", "긔쳑", "롱런", "곬섶", "체꼉", "뎨깁", "물속텔레비죤", "꽝꽝", "심껏", "는앵", "적외선텔레비죤", "내슈빌데이지슨", "되프뎧", "쌀되", "죤득죤득", "툼벙툼벙", "곡뒿", "믈구븨", "구듮곬", "양녬", "꿍꿍", "똠양꿍", "지름똠", "정도껏", "굠쌀", "테르븀", "질쭘질쭘", "쁘라띠그라하니까", "작수뽐쁘", "살쟉", "쟉쟉", "유로퓸", "연몌", "쌀값", "닝금", 
-"피터섐", "창굉", "하이드라이드나트륨", "이오포데이트소듐", "색걍", "시냏", "칭겅", "겅겅", "궤궤", "셸링", "셸락", "역모션", "쳑령", "레닛", "름황", "아랑곳", "이터븀", "시뎡", "장뼘", "에곬", "물곬", "사뿟", "사뿟사뿟", "노보시비르스크", "상트페테르부르크", "프라세오디뮴", "가르미슈파르텐키르헨", "뎡게", "갓괴", "칭귕", "딍에파리", "수톹", "파수꾼", "파쉐", "개울녘", "사마륨", "사기그릇", "낭랑", "자개그릇", "비틂", "비넁", "나릇", "동녘", "해질녘", "서녘", "섯녘", "북녘", "남녘", "가돌리늄", "소듐", "필리움콤뮨", "엇졉", "애ꬿ", "시티콜린소듐", "어여쁨", "동클로로필린나트륨", "이터븀", "셜교", "값군", "송궃", "모밇", "얼락만수탉", "십사하이드록시디하이드로몰핀", "레이자텔레비죤", "우믈", "옴폭딱", "늬나노", "방울값", "값표", "표준값", "슭곰발", "발댬", "슭곰", "다다", "가가", "긔츌", "넨지", "시시", "마마", "기기", "기리기", "자기", "마그네슘", "터븀", "슘페터", "금값", "기름값", "껏구리", "리튬", "션믈", "윌슨", "울녘", "크로뮴", "쭝쭝", "노듈", "마름모무늬", "셩졔", "이리듐", "욜로", "뉠리리야", 
-"다리낏", "새끼발틉", "콘체른", "계절머슴", "섬돓", "옌볜", "섶나무", "디듬돐", "상추썀", "상껏", "욜쒜", "무즙", "가늠값", "가중값", "가도멸괵", "가취꿋", "가자미저냐", "가늣", "가로무늬", "가요무늬", "가랏", "가스블랙", "가시우럭", "가마후렁", "가짓부렁", "가시물벼룩", "가위발톱물벼룩", "가를", "가귀노름", "가느스름", "가락기름", "가래기름", "가루거름", "가마무트름", "가무트름", "가무스름", "가매지름", "가시물그릇", "가재무릇", "가제무릇", "가이데릭", "가톨릭", "가격인덱세이션", "가오슝", "가얌버슷", "가렛좃", "가슴팍", "바느질값", "바다곬", "바람곬", "바깥", "바느질꾼", "바둑꾼", "바람꾼", "바디뀀", "바지락저냐", "바자가녁", "바둑무늬", "바둑알무늬", "바둑판무늬", "바자무늬", "바탕무늬", "바닿", "바나듐", "바줄매듭", "바듯", "바랄", "바줄뜨랄", "바얌도랏", "바얗", "바위너럭", "바위버럭", "바끄럼", "바럼", "바위두렁", "바위츠렁", "바이올렛", "바늘엉덩이물벼룩", "바다물벼룩", "바다지렁이물벼룩", "바룩", "바륨", "바이탈륨", "바깥어른", "바를", "바릇", "바릊", "바를릿", "바이브레이션", "바이얼레이션", "바이슨", "바자가기슭",
-"수갏", "틱셔", "느냔", "나룻", "까끄랑낫", "듭데", "값같은선", "과레늄산나트륨", "강녘", 
-"갈루아몽브룅", "닥울녘", "둑지꽝",
-"기체크로마틱질량분석법", "부쩝", "굽뒤축", "화뎬", "게훽", "기빱", "수뀅", "떡케잌", "떡메", "마스껨", "상전댁", "가레갊", "읒지냨", "추이롼",
-"늠쩍", "슴뻑", "루비듐", "루테튬", "을기빝", "네오디뮴", "네프투늄", "굽이흐름", "짱구형", "냐짱",
-"왕거뮈", "공뤁", "뮈스카댕", "시루볜", "의몌", "발그믓"
+    "두듥", "두렫", "켓등", "류턴블폼튬", "도린꼍", "뎌춍", "됴셕", "라선형턴넬", 
+    "라렐", "디스프로슘", "등졍", "등뎨", "구냬", "구듫", "그늫", "나준녘", "노르넨", "노붐오르가늄", "니맣", "등츩", "등쨈", "뎌져", "고쇠믓", "산슳", "가래틋", "시틋", "님잫", "벳꽃", "귀틤", "름육", "다툼", "다쁘", "믈집", "름호", "가시섶", "뎡강모디", "꾼둑꾼둑", "둑슨", "슨몽", "몽생미셸", "셸륵", "락톤", "긧고", "귓발", "긔딪", "슷바닥", "믜신것", "늡렬", "늡늡", "귿곻", "남긧버슷", "톄언문", "롱어", "즘즉", "다름슈타튬", "나이오븀", "로듐", "레늄", "엇비슷", "낭자", "장징궈", "스트론튬", "벳살", "당구솣", "뎡그당", "피토크로뮴", "가슝", "나랗", "가듁", "듁순", "늬굽", "듸레", "쨔다", "장구매듭", "시긔", "읏듬", "지르코늄", "욹은불근", "낏내", "욹다", "시욹", "차마륨", "차풰", "왕듸", "믈라카", "살갗", "차이쨔", "윕쌀", "냥쭝", "내뎡", "긿다", "프랑슘", "곰븨님븨", "가린긿", "다른", "역스윕", "돌꿴", "인듐", "옌청", "름연", "마긶", "자이로파일럿", "식물무늬", "방틀무늬", "방듸", "전녆", "대숳", "믈뎜", 
+    "이렁셩", "돌꼇", "성심성의껏", "정성껏", "다롄", "가랒", "나잇값", "선곬", "질그릇", "균핵균", "신시튬", "잎자욱", "치읓", "히엗", "피읖", "디귿", "치마긶", "늣치", "늣하르방", "봇둑", "기뇰", "내곬", "사뿐", "나트륨", "다이디뮴", "표고버섯", "가측값", "대감굿", "뭄푸레", "발가울넠", "윰차", "윰라대왕", "시보귬", "기동돓", "굽굽", "자릿값", "차죵", "다박나룻", "쨔지다", "뭄바이", "트레이닝", "갸름컁컁", "겨욹", "거믜", "거먕", "고농축우라늄", "구읫잫", "구연산철암모늄", "규산마그네슘", "규산알루미늄", "그릇그릇", "그듸", "그랑기뇰", "너븨", "노멀라이제이션", "누괵", "누드룩", "뉴메틱케이슨", "뉴페인팅", "느븨", "느른", "씀바귀", "는곱", "겍자", "슨상", "체겍", "긔쳑", "롱런", "곬섶", "체꼉", "뎨깁", "물속텔레비죤", "꽝꽝", "심껏", "는앵", "적외선텔레비죤", "내슈빌데이지슨", "되프뎧", "쌀되", "죤득죤득", "툼벙툼벙", "곡뒿", "믈구븨", "구듮곬", "양녬", "꿍꿍", "똠양꿍", "지름똠", "정도껏", "굠쌀", "테르븀", "질쭘질쭘", "쁘라띠그라하니까", "작수뽐쁘", "살쟉", "쟉쟉", "유로퓸", "연몌", "쌀값", "닝금", 
+    "피터섐", "창굉", "하이드라이드나트륨", "이오포데이트소듐", "색걍", "시냏", "칭겅", "겅겅", "궤궤", "셸링", "셸락", "역모션", "쳑령", "레닛", "름황", "아랑곳", "이터븀", "시뎡", "장뼘", "에곬", "물곬", "사뿟", "사뿟사뿟", "노보시비르스크", "상트페테르부르크", "프라세오디뮴", "가르미슈파르텐키르헨", "뎡게", "갓괴", "칭귕", "딍에파리", "수톹", "파수꾼", "파쉐", "개울녘", "사마륨", "사기그릇", "낭랑", "자개그릇", "비틂", "비넁", "나릇", "동녘", "해질녘", "서녘", "섯녘", "북녘", "남녘", "가돌리늄", "소듐", "필리움콤뮨", "엇졉", "애ꬿ", "시티콜린소듐", "어여쁨", "동클로로필린나트륨", "이터븀", "셜교", "값군", "송궃", "모밇", "얼락만수탉", "십사하이드록시디하이드로몰핀", "레이자텔레비죤", "우믈", "옴폭딱", "늬나노", "방울값", "값표", "표준값", "슭곰발", "발댬", "슭곰", "다다", "가가", "긔츌", "넨지", "시시", "마마", "기기", "기리기", "자기", "마그네슘", "터븀", "슘페터", "금값", "기름값", "껏구리", "리튬", "션믈", "윌슨", "울녘", "크로뮴", "쭝쭝", "노듈", "마름모무늬", "셩졔", "이리듐", "욜로", "뉠리리야", 
+    "다리낏", "새끼발틉", "콘체른", "계절머슴", "섬돓", "옌볜", "섶나무", "디듬돐", "상추썀", "상껏", "욜쒜", "무즙", "가늠값", "가중값", "가도멸괵", "가취꿋", "가자미저냐", "가늣", "가로무늬", "가요무늬", "가랏", "가스블랙", "가시우럭", "가마후렁", "가짓부렁", "가시물벼룩", "가위발톱물벼룩", "가를", "가귀노름", "가느스름", "가락기름", "가래기름", "가루거름", "가마무트름", "가무트름", "가무스름", "가매지름", "가시물그릇", "가재무릇", "가제무릇", "가이데릭", "가톨릭", "가격인덱세이션", "가오슝", "가얌버슷", "가렛좃", "가슴팍", "바느질값", "바다곬", "바람곬", "바깥", "바느질꾼", "바둑꾼", "바람꾼", "바디뀀", "바지락저냐", "바자가녁", "바둑무늬", "바둑알무늬", "바둑판무늬", "바자무늬", "바탕무늬", "바닿", "바나듐", "바줄매듭", "바듯", "바랄", "바줄뜨랄", "바얌도랏", "바얗", "바위너럭", "바위버럭", "바끄럼", "바럼", "바위두렁", "바위츠렁", "바이올렛", "바늘엉덩이물벼룩", "바다물벼룩", "바다지렁이물벼룩", "바룩", "바륨", "바이탈륨", "바깥어른", "바를", "바릇", "바릊", "바를릿", "바이브레이션", "바이얼레이션", "바이슨", "바자가기슭",
+    "수갏", "틱셔", "느냔", "나룻", "까끄랑낫", "듭데", "값같은선", "과레늄산나트륨", "강녘", 
+    "갈루아몽브룅", "닥울녘", "둑지꽝",
+    "기체크로마틱질량분석법", "부쩝", "굽뒤축", "화뎬", "게훽", "기빱", "수뀅", "떡케잌", "떡메", "마스껨", "상전댁", "가레갊", "읒지냨", "추이롼",
+    "늠쩍", "슴뻑", "루비듐", "루테튬", "을기빝", "네오디뮴", "네프투늄", "굽이흐름", "짱구형", "냐짱",
+    "왕거뮈", "공뤁", "뮈스카댕", "시루볜", "의몌", "발그믓"
 }
 table.sort(WordDB)
 
+-- =======================================================================
+-- [자모 해체 및 조합 타이핑 상태 머신 인코더]
+-- =======================================================================
 local SBASE, VCOUNT, TCOUNT = 0xAC00, 21, 28
 local NCOUNT, SCOUNT = VCOUNT * TCOUNT, 19 * VCOUNT * TCOUNT
 local CHO = {0x3131,0x3132,0x3134,0x3137,0x3138,0x3139,0x3141,0x3142,0x3143,0x3145,0x3146,0x3147,0x3148,0x3149,0x314A,0x314B,0x314C,0x314D,0x314E}
@@ -319,115 +311,115 @@ for i = 0, 20 do local k = JUNG_KEYS[i]
 if #k == 2 then JUNG_COMBINE[JUNG_OF[k[1]]*1000 + k[2]] = i end end
 
 local function wordToKeys(word)
-local keys = {}
-for _, cp in utf8.codes(word) do
-if cp >= SBASE and cp < SBASE + SCOUNT then
-local s = cp - SBASE
-keys[#keys+1] = CHO[math.floor(s / NCOUNT) + 1]
-for _, k in ipairs(JUNG_KEYS[math.floor((s % NCOUNT) / TCOUNT)]) do keys[#keys+1] = k end
-local t = s % TCOUNT
-if t > 0 then for _, k in ipairs(JONG_KEYS[t]) do keys[#keys+1] = k end end
-else keys[#keys+1] = cp end
-end
-return keys
+    local keys = {}
+    for _, cp in utf8.codes(word) do
+        if cp >= SBASE and cp < SBASE + SCOUNT then
+            local s = cp - SBASE
+            keys[#keys+1] = CHO[math.floor(s / NCOUNT) + 1]
+            for _, k in ipairs(JUNG_KEYS[math.floor((s % NCOUNT) / TCOUNT)]) do keys[#keys+1] = k end
+            local t = s % TCOUNT
+            if t > 0 then for _, k in ipairs(JONG_KEYS[t]) do keys[#keys+1] = k end end
+        else keys[#keys+1] = cp end
+    end
+    return keys
 end
 
 local function render(committed, cho, jung, jong)
-if cho and jung then return committed .. utf8.char(SBASE + (cho*VCOUNT + jung)*TCOUNT + jong)
-elseif cho then return committed .. utf8.char(CHO[cho+1])
-elseif jung then return committed .. utf8.char(JUNG[jung+1]) end
-return committed
+    if cho and jung then return committed .. utf8.char(SBASE + (cho*VCOUNT + jung)*TCOUNT + jong)
+    elseif cho then return committed .. utf8.char(CHO[cho+1])
+    elseif jung then return committed .. utf8.char(JUNG[jung+1]) end
+    return committed
 end
 
 local function buildTypeStates(word)
-local keys = wordToKeys(word)
-local states, committed = {}, ""
-local cho, jung, jong = nil, nil, 0
-local function commit() committed = render(committed, cho, jung, jong);
-cho, jung, jong = nil, nil, 0 end
-for _, cp in ipairs(keys) do
-if CHO_OF[cp] then
-if cho and jung then
-if jong == 0 and JONG_OF[cp] then jong = JONG_OF[cp]
-elseif jong > 0 and JONG_COMBINE[jong*100 + cp] then jong = JONG_COMBINE[jong*100 + cp]
-else commit();
-cho = CHO_OF[cp] end
-elseif cho then commit(); cho = CHO_OF[cp]
-else cho = CHO_OF[cp] end
-elseif JUNG_OF[cp] then
-if jong > 0 then
-local kt = JONG_KEYS[jong]
-if #kt == 2 then jong = JONG_OF[kt[1]];
-commit(); cho = CHO_OF[kt[2]]; jung = JUNG_OF[cp]
-else jong = 0; commit(); cho = CHO_OF[kt[1]];
-jung = JUNG_OF[cp] end
-elseif cho and jung then
-local comb = JUNG_COMBINE[jung*1000 + cp]
-if comb then jung = comb else commit();
-jung = JUNG_OF[cp] end
-elseif jung then
-local comb = JUNG_COMBINE[jung*1000 + cp]
-if comb then jung = comb else commit();
-jung = JUNG_OF[cp] end
-else jung = JUNG_OF[cp] end
-else commit(); committed = committed .. utf8.char(cp) end
-states[#states+1] = render(committed, cho, jung, jong)
-end
-local out = {}
-for _, s in ipairs(states) do if out[#out] ~= s then out[#out+1] = s end end
-if #out == 0 or out[#out] ~= word then out[#out+1] = word end
-return out
+    local keys = wordToKeys(word)
+    local states, committed = {}, ""
+    local cho, jung, jong = nil, nil, 0
+    local function commit() committed = render(committed, cho, jung, jong); cho, jung, jong = nil, nil, 0 end
+    for _, cp in ipairs(keys) do
+        if CHO_OF[cp] then
+            if cho and jung then
+                if jong == 0 and JONG_OF[cp] then jong = JONG_OF[cp]
+                elseif jong > 0 and JONG_COMBINE[jong*100 + cp] then jong = JONG_COMBINE[jong*100 + cp]
+                else commit(); cho = CHO_OF[cp] end
+            elseif cho then commit(); cho = CHO_OF[cp]
+            else cho = CHO_OF[cp] end
+        elseif JUNG_OF[cp] then
+            if jong > 0 then
+                local kt = JONG_KEYS[jong]
+                if #kt == 2 then jong = JONG_OF[kt[1]]; commit(); cho = CHO_OF[kt[2]]; jung = JUNG_OF[cp]
+                else jong = 0; commit(); cho = CHO_OF[kt[1]]; jung = JUNG_OF[cp] end
+            elseif cho and jung then
+                local comb = JUNG_COMBINE[jung*1000 + cp]
+                if comb then jung = comb else commit(); jung = JUNG_OF[cp] end
+            elseif jung then
+                local comb = JUNG_COMBINE[jung*1000 + cp]
+                if comb then jung = comb else commit(); jung = JUNG_OF[cp] end
+            else jung = JUNG_OF[cp] end
+        else commit(); committed = committed .. utf8.char(cp) end
+        states[#states+1] = render(committed, cho, jung, jong)
+    end
+    local out = {}
+    for _, s in ipairs(states) do if out[#out] ~= s then out[#out+1] = s end end
+    if #out == 0 or out[#out] ~= word then out[#out+1] = word end
+    return out
 end
 
+-- =======================================================================
+-- [통신용 가용 HTTP 요청 라우터 메커니즘]
+-- =======================================================================
 local requestFunction
 do
-local tbl = {
-function() return request end,
-function() return http_request end,
-function() return http and http.request or nil end,
-function() local ok, r = pcall(function() return syn.request end) return ok and r or nil end,
-function() local ok, r = pcall(function() return Fluxus and Fluxus.request or nil end) return ok and r or nil end
-}
-for _, fn in pairs(tbl) do
-local ok, r = pcall(fn)
-if ok and r then requestFunction = r break end
-end
+    local tbl = {
+        function() return request end,
+        function() return http_request end,
+        function() return http and http.request or nil end,
+        function() local ok, r = pcall(function() return syn.request end) return ok and r or nil end,
+        function() local ok, r = pcall(function() return Fluxus and Fluxus.request or nil end) return ok and r or nil end
+    }
+    for _, fn in pairs(tbl) do
+        local ok, r = pcall(fn)
+        if ok and r then requestFunction = r break end
+    end
 end
 
 local function downloadData(url)
-if not requestFunction then return nil end
-local success, response = pcall(requestFunction, {Url = url, Method = "GET"})
-if success and response.StatusCode == 200 then return response.Body end
-return nil
+    if not requestFunction then return nil end
+    local success, response = pcall(requestFunction, {Url = url, Method = "GET"})
+    if success and response.StatusCode == 200 then return response.Body end
+    return nil
 end
 
 local function initDataSystem()
-local function loadOrDownload(cachePath, url, targetTbl)
-if readfile and isfile and isfile(cachePath) then
-pcall(function() local d = HS:JSONDecode(readfile(cachePath)) for k,v in pairs(d) do targetTbl[k] = v end end)
-else
-local raw = downloadData(url)
-if raw then
-pcall(function()
-local d = HS:JSONDecode(raw)
-for k,v in pairs(d) do targetTbl[k] = v end
-if writefile then writefile(cachePath, raw) end
-end)
-end
-end
-end
+    local function loadOrDownload(cachePath, url, targetTbl)
+        if readfile and isfile and isfile(cachePath) then
+            pcall(function() local d = HS:JSONDecode(readfile(cachePath)) for k,v in pairs(d) do targetTbl[k] = v end end)
+        else
+            local raw = downloadData(url)
+            if raw then
+                pcall(function()
+                    local d = HS:JSONDecode(raw)
+                    for k,v in pairs(d) do targetTbl[k] = v end
+                    if writefile then writefile(cachePath, raw) end
+                end)
+            end
+        end
+    end
 
-loadOrDownload(DUEUM_CACHE, DUEUM_URL, DUEUM)
-loadOrDownload(CACHE_FILE, DICT_URL, DICT)
-loadOrDownload(OPENING_DICT_CACHE, OPENING_DICT_URL, OPENING_DICT)
-loadOrDownload(ROUTES_CACHE, ROUTES_URL, ROUTES)
-loadOrDownload(CERT_CACHE, CERT_URL, CERTIFICATES)
-loadOrDownload(OPENERS_CACHE, OPENERS_URL, OPENERS)
- loadOrDownload(WHITELIST_CACHE, WHITELIST_URL, downloadedWhitelist)
+    loadOrDownload(DUEUM_CACHE, DUEUM_URL, DUEUM)
+    loadOrDownload(CACHE_FILE, DICT_URL, DICT)
+    loadOrDownload(OPENING_DICT_CACHE, OPENING_DICT_URL, OPENING_DICT)
+    loadOrDownload(ROUTES_CACHE, ROUTES_URL, ROUTES)
+    loadOrDownload(CERT_CACHE, CERT_URL, CERTIFICATES)
+    loadOrDownload(OPENERS_CACHE, OPENERS_URL, OPENERS)
+    
+    local whiteRaw = downloadData(WHITELIST_URL)
+    if whiteRaw then
+        pcall(function() downloadedWhitelist = HS:JSONDecode(whiteRaw) end)
+    end
 end
 initDataSystem()
 
-local isUserPremium = false
 for _, id in pairs(downloadedWhitelist) do
     if tonumber(id) == _lp.UserId then
         isUserPremium = true
@@ -435,22 +427,26 @@ for _, id in pairs(downloadedWhitelist) do
     end
 end
 
+showUpdateLogWindow(isUserPremium)
+
 local function getCompatibleChars(char)
-if DUEUM and DUEUM[char] then
-if type(DUEUM[char]) == "table" then
-local res = {char}
-for _, v in ipairs(DUEUM[char]) do table.insert(res, v) end
-return res
-else return {char, DUEUM[char]} end
-end
-return {char}
+    if DUEUM and DUEUM[char] then
+        if type(DUEUM[char]) == "table" then
+            local res = {char}
+            for _, v in ipairs(DUEUM[char]) do table.insert(res, v) end
+            return res
+        else return {char, DUEUM[char]} end
+    end
+    return {char}
 end
 
+-- =======================================================================
+-- [코어 GUI 디자인 프레임워크 설계]
+-- =======================================================================
 local gui = Instance.new("ScreenGui", _cg)
 gui.Name = "CustomWordFinderGui"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = _T
-
 pcall(function() gui.Archivable = false end)
 
 local fullLoadingFrame = Instance.new("Frame", gui)
@@ -506,13 +502,14 @@ toggleBtn.Visible = false
 Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 5 * uiScale)
 
 toggleBtn.MouseButton1Click:Connect(function()
-frame.Visible = not frame.Visible
-if frame.Visible then
-toggleBtn.Text = "단어장 OFF"
-toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
-else
-toggleBtn.Text = "단어장 ON"
-toggleBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55) end
+    frame.Visible = not frame.Visible
+    if frame.Visible then
+        toggleBtn.Text = "단어장 OFF"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
+    else
+        toggleBtn.Text = "단어장 ON"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    end
 end)
 
 local title = Instance.new("TextButton", frame)
@@ -528,25 +525,25 @@ Instance.new("UICorner", title)
 local dragging = false
 local dragInput, dragStart, startPos
 title.InputBegan:Connect(function(input)
-if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-dragging = _T
-dragStart = input.Position
-startPos = frame.Position
-input.Changed:Connect(function()
-if input.UserInputState == Enum.UserInputState.End then dragging = false end
-end)
-end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = _T
+        dragStart = input.Position
+        startPos = frame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
 end)
 
 title.InputChanged:Connect(function(input)
-if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
 end)
 
 game:GetService("UserInputService").InputChanged:Connect(function(input)
-if input == dragInput and dragging then
-local delta = input.Position - dragStart
-frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-end
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
 end)
 
 local mainTabSection = Instance.new("Frame", frame)
@@ -690,45 +687,45 @@ antiBanBtn.TextSize = math.round(10 * uiScale)
 Instance.new("UICorner", antiBanBtn)
 
 local function flashPremiumRequiredError()
-local originText = searchBox.Text
-local originColor = searchBox.TextColor3
-local originPlaceholder = searchBox.PlaceholderText
-searchBox.Text = "프리미엄 필요"
-searchBox.TextColor3 = Color3.fromRGB(255, 75, 75)
-searchBox.PlaceholderText = "프리미엄 필요"
-task.delay(1.5, function()
-if searchBox.Text == "프리미엄 필요" then searchBox.Text = originText end
-searchBox.TextColor3 = originColor
-searchBox.PlaceholderText = originPlaceholder
-end)
+    local originText = searchBox.Text
+    local originColor = searchBox.TextColor3
+    local originPlaceholder = searchBox.PlaceholderText
+    searchBox.Text = "프리미엄 필요"
+    searchBox.TextColor3 = Color3.fromRGB(255, 75, 75)
+    searchBox.PlaceholderText = "프리미엄 필요"
+    task.delay(1.5, function()
+        if searchBox.Text == "프리미엄 필요" then searchBox.Text = originText end
+        searchBox.TextColor3 = originColor
+        searchBox.PlaceholderText = originPlaceholder
+    end)
 end
 
 antiBanBtn.MouseButton1Click:Connect(function()
-if not isUserPremium then flashPremiumRequiredError() return end
-antiCheatActive = not antiCheatActive
-if antiCheatActive then
-antiBanBtn.Text = "Anti Ban: ON"
-antiBanBtn.BackgroundColor3 = Color3.fromRGB(0, 85, 45)
-antiBanBtn.TextColor3 = Color3.fromRGB(0, 255, 140)
-else
-antiBanBtn.Text = "Anti Ban: OFF"
-antiBanBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
-antiBanBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-end
+    if not isUserPremium then flashPremiumRequiredError() return end
+    antiCheatActive = not antiCheatActive
+    if antiCheatActive then
+        antiBanBtn.Text = "Anti Ban: ON"
+        antiBanBtn.BackgroundColor3 = Color3.fromRGB(0, 85, 45)
+        antiBanBtn.TextColor3 = Color3.fromRGB(0, 255, 140)
+    else
+        antiBanBtn.Text = "Anti Ban: OFF"
+        antiBanBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
+        antiBanBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end
 end)
 
 botAiBtn.MouseButton1Click:Connect(function()
-if not isUserPremium then flashPremiumRequiredError() return end
-botAiActive = not botAiActive
-if botAiActive then
-botAiBtn.Text = "BOT AI: ON"
-botAiBtn.BackgroundColor3 = Color3.fromRGB(140, 20, 140)
-botAiBtn.TextColor3 = Color3.fromRGB(255, 200, 255)
-else
-botAiBtn.Text = "BOT AI: OFF"
-botAiBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-botAiBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-end
+    if not isUserPremium then flashPremiumRequiredError() return end
+    botAiActive = not botAiActive
+    if botAiActive then
+        botAiBtn.Text = "BOT AI: ON"
+        botAiBtn.BackgroundColor3 = Color3.fromRGB(140, 20, 140)
+        botAiBtn.TextColor3 = Color3.fromRGB(255, 200, 255)
+    else
+        botAiBtn.Text = "BOT AI: OFF"
+        botAiBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        botAiBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    end
 end)
 
 local spamPanel = Instance.new("Frame", rightControlSection)
@@ -781,416 +778,469 @@ Instance.new("UICorner", spamCountBox)
 
 local currentTypeSession = 0
 btnTabDict.MouseButton1Click:Connect(function()
-btnTabDict.BackgroundColor3 = Color3.fromRGB(22, 22, 25)
-btnTabDict.TextColor3 = Color3.fromRGB(0, 255, 140)
-btnTabSpam.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-btnTabSpam.TextColor3 = Color3.fromRGB(180, 180, 180)
-dictPanel.Visible = _T
-spamPanel.Visible = false
+    btnTabDict.BackgroundColor3 = Color3.fromRGB(22, 22, 25)
+    btnTabDict.TextColor3 = Color3.fromRGB(0, 255, 140)
+    btnTabSpam.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    btnTabSpam.TextColor3 = Color3.fromRGB(180, 180, 180)
+    dictPanel.Visible = _T
+    spamPanel.Visible = false
 end)
 
 btnTabSpam.MouseButton1Click:Connect(function()
-btnTabSpam.BackgroundColor3 = Color3.fromRGB(22, 22, 25)
-btnTabSpam.TextColor3 = Color3.fromRGB(255, 170, 0)
-btnTabDict.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-btnTabDict.TextColor3 = Color3.fromRGB(180, 180, 180)
-dictPanel.Visible = false
-spamPanel.Visible = _T
+    btnTabSpam.BackgroundColor3 = Color3.fromRGB(22, 22, 25)
+    btnTabSpam.TextColor3 = Color3.fromRGB(255, 170, 0)
+    btnTabDict.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    btnTabDict.TextColor3 = Color3.fromRGB(180, 180, 180)
+    dictPanel.Visible = false
+    spamPanel.Visible = _T
 end)
 
+-- =======================================================================
+-- [인게임 입력 객체 감지 및 자동 타이핑 파이프라인]
+-- =======================================================================
 local function findGameTextBox()
-local plGui = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
-if not plGui then return nil end
-local gg = plGui:FindFirstChild("GameGui")
-local box = gg and gg:FindFirstChild("TriesFrame") and gg.TriesFrame:FindFirstChild("TypeFrame") and gg.TriesFrame.TypeFrame:FindFirstChild("TextBox")
-if box and box:IsA("TextBox") and box.Visible and box.TextTransparency < 1 and box.Parent and box.Parent.Visible then return box end
-for _, v in ipairs(plGui:GetDescendants()) do
-if v:IsA("TextBox") and v.Visible and v.TextTransparency < 1 and (v.Parent and v.Parent.Visible) then
-if v.Name == "TextBox" or v.Name == "InputText" or v.Parent.Name == "TypeFrame" then return v end
-end
-end
-return nil
+    local plGui = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if not plGui then return nil end
+    local gg = plGui:FindFirstChild("GameGui")
+    local box = gg and gg:FindFirstChild("TriesFrame") and gg.TriesFrame:FindFirstChild("TypeFrame") and gg.TriesFrame.TypeFrame:FindFirstChild("TextBox")
+    if box and box:IsA("TextBox") and box.Visible and box.TextTransparency < 1 and box.Parent and box.Parent.Visible then return box end
+    for _, v in ipairs(plGui:GetDescendants()) do
+        if v:IsA("TextBox") and v.Visible and v.TextTransparency < 1 and (v.Parent and v.Parent.Visible) then
+            if v.Name == "TextBox" or v.Name == "InputText" or v.Parent.Name == "TypeFrame" then return v end
+        end
+    end
+    return nil
 end
 
 local function sendWordToGame(word, explicitBox)
-if word == "" then return end
-local targetBox = explicitBox or findGameTextBox()
-if not targetBox then return end
-currentTypeSession = currentTypeSession + 1
-local mySession = currentTypeSession
-local speed = tonumber(speedInputBox.Text) or 400
-pcall(function()
-targetBox.Text = ""
-targetBox:CaptureFocus()
-if speed <= 0 then
-if mySession ~= currentTypeSession then return end
-targetBox.Text = word
-else
-local totalStates = buildTypeStates(word)
-local delayTime = 60 / (speed * 2.5)
-for _, partialText in ipairs(totalStates) do
-if mySession ~= currentTypeSession then return end
-targetBox.Text = partialText
-task.wait(delayTime)
-end
-end
-if mySession ~= currentTypeSession then return end
-task.wait(0.01)
-targetBox:ReleaseFocus(_T)
-if antiCheatActive and isUserPremium then
-task.wait(0.08)
-if mySession == currentTypeSession then
-targetBox.Text = ""
-collectgarbage("collect")
-end
-end
-end)
+    if word == "" then return end
+    local targetBox = explicitBox or findGameTextBox()
+    if not targetBox then return end
+    currentTypeSession = currentTypeSession + 1
+    local mySession = currentTypeSession
+    local speed = tonumber(speedInputBox.Text) or 400
+    pcall(function()
+        targetBox.Text = ""
+        targetBox:CaptureFocus()
+        if speed <= 0 then
+            if mySession ~= currentTypeSession then return end
+            targetBox.Text = word
+        else
+            local totalStates = buildTypeStates(word)
+            local delayTime = 60 / (speed * 2.5)
+            for _, partialText in ipairs(totalStates) do
+                if mySession ~= currentTypeSession then return end
+                targetBox.Text = partialText
+                task.wait(delayTime)
+            end
+        end
+        if mySession ~= currentTypeSession then return end
+        task.wait(0.01)
+        targetBox:ReleaseFocus(_T)
+        
+        -- [연동] 단어가 정상 전송되었으므로 첫 턴 제한 상태 해제
+        FirstTurnManager.onWordAccepted(word)
+        
+        if antiCheatActive and isUserPremium then
+            task.wait(0.08)
+            if mySession == currentTypeSession then
+                targetBox.Text = ""
+                collectgarbage("collect")
+            end
+        end
+    end)
 end
 
 chatSpamBtn.MouseButton1Click:Connect(function()
-local msg = spamTextBox.Text
-local count = tonumber(spamCountBox.Text) or 1
-if msg == "" then return end
-task.spawn(function()
-local textChatService = game:GetService("TextChatService")
-local replicatedStorage = game:GetService("ReplicatedStorage")
-for i = 1, count do
-local sent = false
-if textChatService and textChatService.ChatInputBarConfiguration then
-local currentChannel = textChatService.ChatInputBarConfiguration.TargetTextChannel
-if currentChannel then
-currentChannel:SendAsync(msg)
-sent = true
-end
-end
-if not sent then
-local sayMessage = replicatedStorage:FindFirstChild("SayMessageRequest", true) or replicatedStorage:FindFirstChild("DefaultChatSystemChatEvents") and replicatedStorage.DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
-if sayMessage and sayMessage:IsA("RemoteEvent") then
-sayMessage:FireServer(msg, "All")
-end
-end
-task.wait(0.15)
-end
-end)
+    local msg = spamTextBox.Text
+    local count = tonumber(spamCountBox.Text) or 1
+    if msg == "" then return end
+    task.spawn(function()
+        local textChatService = game:GetService("TextChatService")
+        local replicatedStorage = game:GetService("ReplicatedStorage")
+        for i = 1, count do
+            local sent = false
+            if textChatService and textChatService.ChatInputBarConfiguration then
+                local currentChannel = textChatService.ChatInputBarConfiguration.TargetTextChannel
+                if currentChannel then
+                    currentChannel:SendAsync(msg)
+                    sent = true
+                end
+            end
+            if not sent then
+                local sayMessage = replicatedStorage:FindFirstChild("SayMessageRequest", true) or replicatedStorage:FindFirstChild("DefaultChatSystemChatEvents") and replicatedStorage.DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
+                if sayMessage and sayMessage:IsA("RemoteEvent") then
+                    sayMessage:FireServer(msg, "All")
+                end
+            end
+            task.wait(0.15)
+        end
+    end)
 end)
 
 local function runEmergencySpam()
-local targetBox = findGameTextBox()
-if not targetBox then return end
-task.spawn(function()
-for i = 1, 5 do
-pcall(function()
-targetBox.Text = ""
-targetBox:CaptureFocus()
-targetBox.Text = "ㄴ"
-task.wait(0.01)
-targetBox:ReleaseFocus(_T)
-end)
-task.wait(0.12)
-end
-collectgarbage("collect")
-end)
+    local targetBox = findGameTextBox()
+    if not targetBox then return end
+    task.spawn(function()
+        for i = 1, 5 do
+            pcall(function()
+                targetBox.Text = ""
+                targetBox:CaptureFocus()
+                targetBox.Text = "ㄴ"
+                task.wait(0.01)
+                targetBox:ReleaseFocus(_T)
+            end)
+            task.wait(0.12)
+        end
+        collectgarbage("collect")
+    end)
 end
 
 killSelfBtn.MouseButton1Click:Connect(function()
-runEmergencySpam()
+    runEmergencySpam()
 end)
 
 customEnterBtn.MouseButton1Click:Connect(function()
-sendWordToGame(customInputBox.Text)
-customInputBox.Text = ""
+    sendWordToGame(customInputBox.Text)
+    customInputBox.Text = ""
 end)
 
 customInputBox.FocusLost:Connect(function(enterPressed)
-if enterPressed then
-sendWordToGame(customInputBox.Text)
-customInputBox.Text = ""
-end
+    if enterPressed then
+        sendWordToGame(customInputBox.Text)
+        customInputBox.Text = ""
+    end
 end)
 
+-- =======================================================================
+-- [GUI 단어 요소 생성 및 분류 모듈]
+-- =======================================================================
 local function createWordElement(w, orderScore, overrideHideNonPremium)
-if not isUserPremium and overrideHideNonPremium then return nil end
-local lbl = Instance.new("TextButton", scroll)
-lbl.Size = UDim2.new(1, -4 * uiScale, 0, 22 * uiScale)
-lbl.Font = Enum.Font.SourceSansBold
-lbl.TextSize = math.round(11 * uiScale)
-lbl.TextXAlignment = Enum.TextXAlignment.Left
-Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 4 * uiScale)
+    if not isUserPremium and overrideHideNonPremium then return nil end
+    local lbl = Instance.new("TextButton", scroll)
+    lbl.Size = UDim2.new(1, -4 * uiScale, 0, 22 * uiScale)
+    lbl.Font = Enum.Font.SourceSansBold
+    lbl.TextSize = math.round(11 * uiScale)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 4 * uiScale)
 
-if isUserPremium then
-local wLen = utf8.len(w) or #w
-if wLen >= 6 then
-lbl.BackgroundColor3 = Color3.fromRGB(110, 40, 150)
-lbl.Text = " 👑 [초장문] " .. w
-lbl.TextColor3 = Color3.fromRGB(240, 200, 255)
-lbl.LayoutOrder = orderScore
-elseif checkIsKillWord(w) then
-lbl.BackgroundColor3 = Color3.fromRGB(90, 25, 30)
-lbl.Text = " 🔥 [한방] " .. w
-lbl.TextColor3 = Color3.fromRGB(255, 220, 100)
-lbl.LayoutOrder = orderScore + 10000
-elseif checkIsChobanWord(w) then
-lbl.BackgroundColor3 = Color3.fromRGB(25, 60, 90)
-lbl.Text = " ⚡ [방어] " .. w
-lbl.TextColor3 = Color3.fromRGB(150, 220, 255)
-lbl.LayoutOrder = orderScore + 20000
-else
-lbl.BackgroundColor3 = Color3.fromRGB(40, 42, 48)
-lbl.Text = " 📄 [일반] " .. w
-lbl.TextColor3 = Color3.fromRGB(200, 200, 200)
-lbl.LayoutOrder = orderScore + 30000
-end
-else
-lbl.BackgroundColor3 = Color3.fromRGB(40, 42, 48)
-lbl.Text = " 📄 " .. w
-lbl.TextColor3 = Color3.fromRGB(190, 190, 190)
-lbl.LayoutOrder = orderScore
+    if isUserPremium then
+        local wLen = utf8.len(w) or #w
+        if wLen >= 6 then
+            lbl.BackgroundColor3 = Color3.fromRGB(110, 40, 150)
+            lbl.Text = " 👑 [초장문] " .. w
+            lbl.TextColor3 = Color3.fromRGB(240, 200, 255)
+            lbl.LayoutOrder = orderScore
+        elseif checkIsKillWord(w) then
+            lbl.BackgroundColor3 = Color3.fromRGB(90, 25, 30)
+            lbl.Text = " 🔥 [한방] " .. w
+            lbl.TextColor3 = Color3.fromRGB(255, 220, 100)
+            lbl.LayoutOrder = orderScore + 10000
+        elseif checkIsChobanWord(w) then
+            lbl.BackgroundColor3 = Color3.fromRGB(25, 60, 90)
+            lbl.Text = " ⚡ [방어] " .. w
+            lbl.TextColor3 = Color3.fromRGB(150, 220, 255)
+            lbl.LayoutOrder = orderScore + 20000
+        else
+            lbl.BackgroundColor3 = Color3.fromRGB(40, 42, 48)
+            lbl.Text = " 📄 [일반] " .. w
+            lbl.TextColor3 = Color3.fromRGB(200, 200, 200)
+            lbl.LayoutOrder = orderScore + 30000
+        end
+    else
+        lbl.BackgroundColor3 = Color3.fromRGB(40, 42, 48)
+        lbl.Text = " 📄 " .. w
+        lbl.TextColor3 = Color3.fromRGB(190, 190, 190)
+        lbl.LayoutOrder = orderScore
+    end
+
+    lbl.MouseButton1Click:Connect(function()
+        sendWordToGame(w)
+    end)
+    return lbl
 end
 
-lbl.MouseButton1Click:Connect(function()
-sendWordToGame(w)
-end)
-return lbl
-end
-
+-- =======================================================================
+-- [의사결정 보조 AI 단어 지능형 선별 알고리즘]
+-- =======================================================================
 local function selectBestWordAi(char)
-local targets = getCompatibleChars(char)
-local tier1, tier2, tier3, tier4 = {}, {}, {}, {}
-local fallbackAll = {}
-local uniqueCheck = {}
+    local targets = getCompatibleChars(char)
+    local tier1, tier2, tier3, tier4 = {}, {}, {}, {}
+    local fallbackAll = {}
+    local uniqueCheck = {}
 
-local function sortAndInsert(w)
-if uniqueCheck[w] then return end
-uniqueCheck[w] = true
-table.insert(fallbackAll, w)
-local wLen = utf8.len(w) or #w
-if wLen >= 6 then
-table.insert(tier1, w)
-elseif checkIsKillWord(w) then
-table.insert(tier2, w)
-elseif checkIsChobanWord(w) then
-table.insert(tier3, w)
-else
-table.insert(tier4, w)
-end
-end
+    local function sortAndInsert(w)
+        if uniqueCheck[w] then return end
+        uniqueCheck[w] = true
+        table.insert(fallbackAll, w)
+        local wLen = utf8.len(w) or #w
+        if wLen >= 6 then
+            table.insert(tier1, w)
+        elseif checkIsKillWord(w) then
+            -- [연동] 첫 턴이고 한방 단어 방지가 활성화되어 있다면 한방 티어에서 제외
+            if not FirstTurnManager.shouldAvoidOneShot(false) then
+                table.insert(tier2, w)
+            else
+                table.insert(tier4, w)
+            end
+        elseif checkIsChobanWord(w) then
+            table.insert(tier3, w)
+        else
+            table.insert(tier4, w)
+        end
+    end
 
-for _, w in ipairs(WordDB) do
-for _, target in ipairs(targets) do
-if string.sub(w, 1, string.len(target)) == target then
-sortAndInsert(w)
-break
-end
-end
-end
+    for _, w in ipairs(WordDB) do
+        for _, target in ipairs(targets) do
+            if string.sub(w, 1, string.len(target)) == target then
+                sortAndInsert(w)
+                break
+            end
+        end
+    end
 
-for _, target in ipairs(targets) do
-if DICT and DICT[target] then
-for _, w in ipairs(DICT[target]) do sortAndInsert(w) end
-end
-if OPENING_DICT and OPENING_DICT[target] then
-for _, w in ipairs(OPENING_DICT[target]) do sortAndInsert(w) end
-end
-end
+    for _, target in ipairs(targets) do
+        if DICT and DICT[target] then
+            for _, w in ipairs(DICT[target]) do sortAndInsert(w) end
+        end
+        if OPENING_DICT and OPENING_DICT[target] then
+            for _, w in ipairs(OPENING_DICT[target]) do sortAndInsert(w) end
+        end
+    end
 
-if not isUserPremium then
-if #fallbackAll > 0 then return fallbackAll[math.random(1, #fallbackAll)] end
-return nil
-end
+    if not isUserPremium then
+        if #fallbackAll > 0 then return fallbackAll[math.random(1, #fallbackAll)] end
+        return nil
+    end
 
-if #tier1 > 0 then return tier1[math.random(1, #tier1)] end
-if #tier2 > 0 then return tier2[math.random(1, #tier2)] end
-if #tier3 > 0 then return tier3[math.random(1, #tier3)] end
-if #tier4 > 0 then return tier4[math.random(1, #tier4)] end
-return nil
+    if #tier1 > 0 then return tier1[math.random(1, #tier1)] end
+    if #tier2 > 0 then return tier2[math.random(1, #tier2)] end
+    if #tier3 > 0 then return tier3[math.random(1, #tier3)] end
+    if #tier4 > 0 then return tier4[math.random(1, #tier4)] end
+    return nil
 end
 
 local function updateView(key)
-for _, c in ipairs(scroll:GetChildren()) do
-if c:IsA("TextButton") or c:IsA("TextLabel") then c:Destroy() end
-end
-if key == "" then return 0 end
-local targets = getCompatibleChars(key)
-local uniqueCheck = {}
-local tempCollectedWords = {}
+    for _, c in ipairs(scroll:GetChildren()) do
+        if c:IsA("TextButton") or c:IsA("TextLabel") then c:Destroy() end
+    end
+    if key == "" then return 0 end
+    local targets = getCompatibleChars(key)
+    local uniqueCheck = {}
+    local tempCollectedWords = {}
 
-local function processWord(w)
-if not uniqueCheck[w] then
-uniqueCheck[w] = true
-table.insert(tempCollectedWords, w)
-end
-end
+    local function processWord(w)
+        if not uniqueCheck[w] then
+            uniqueCheck[w] = true
+            table.insert(tempCollectedWords, w)
+        end
+    end
 
-for _, w in ipairs(WordDB) do
-for _, target in ipairs(targets) do
-if string.sub(w, 1, string.len(target)) == target then
-processWord(w)
-break
-end
-end
-end
+    for _, w in ipairs(WordDB) do
+        for _, target in ipairs(targets) do
+            if string.sub(w, 1, string.len(target)) == target then
+                processWord(w)
+                break
+            end
+        end
+    end
 
-for _, target in ipairs(targets) do
-if DICT and DICT[target] then
-for _, w in ipairs(DICT[target]) do processWord(w) end
-end
-if OPENING_DICT and OPENING_DICT[target] then
-for _, w in ipairs(OPENING_DICT[target]) do processWord(w) end
-end
-end
+    for _, target in ipairs(targets) do
+        if DICT and DICT[target] then
+            for _, w in ipairs(DICT[target]) do processWord(w) end
+        end
+        if OPENING_DICT and OPENING_DICT[target] then
+            for _, w in ipairs(OPENING_DICT[target]) do processWord(w) end
+        end
+    end
 
-table.sort(tempCollectedWords, function(a, b)
-local la, lb = utf8.len(a) or #a, utf8.len(b) or #b
-if la ~= lb then return la > lb end
-return a < b
-end)
+    table.sort(tempCollectedWords, function(a, b)
+        local la, lb = utf8.len(a) or #a, utf8.len(b) or #b
+        if la ~= lb then return la > lb end
+        return a < b
+    end)
 
-local visibleCount = 0
-local totalCount = #tempCollectedWords
-local limit = isUserPremium and totalCount or math.clamp(math.round(totalCount * 0.5), 1, 60)
+    local visibleCount = 0
+    local totalCount = #tempCollectedWords
+    local limit = isUserPremium and totalCount or math.clamp(math.round(totalCount * 0.5), 1, 60)
 
-for i, w in ipairs(tempCollectedWords) do
-if i > limit then break end
-createWordElement(w, i, false)
-visibleCount = visibleCount + 1
-end
+    for i, w in ipairs(tempCollectedWords) do
+        if i > limit then break end
+        createWordElement(w, i, false)
+        visibleCount = visibleCount + 1
+    end
 
-if not isUserPremium and totalCount > visibleCount then
-local lock = Instance.new("TextLabel", scroll)
-lock.Size = UDim2.new(1, -4 * uiScale, 0, 24 * uiScale)
-lock.BackgroundColor3 = Color3.fromRGB(45, 30, 30)
-lock.Text = " 🔒 프리미엄 미등록 유저 단어 제한됨 (" .. (totalCount - visibleCount) .. "개 숨겨짐)"
-lock.TextColor3 = Color3.fromRGB(255, 120, 120)
-lock.Font = Enum.Font.SourceSansBold
-lock.TextSize = math.round(10 * uiScale)
-lock.LayoutOrder = 999999
-Instance.new("UICorner", lock)
-end
+    if not isUserPremium and totalCount > visibleCount then
+        local lock = Instance.new("TextLabel", scroll)
+        lock.Size = UDim2.new(1, -4 * uiScale, 0, 24 * uiScale)
+        lock.BackgroundColor3 = Color3.fromRGB(45, 30, 30)
+        lock.Text = " 🔒 프리미엄 미등록 유저 단어 제한됨 (" .. (totalCount - visibleCount) .. "개 숨겨짐)"
+        lock.TextColor3 = Color3.fromRGB(255, 120, 120)
+        lock.Font = Enum.Font.SourceSansBold
+        lock.TextSize = math.round(10 * uiScale)
+        lock.LayoutOrder = 999999
+        Instance.new("UICorner", lock)
+    end
 
-scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + (4 * uiScale))
-return isUserPremium and totalCount or visibleCount
+    scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + (4 * uiScale))
+    return isUserPremium and totalCount or visibleCount
 end
 
 searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-updateView(searchBox.Text)
+    updateView(searchBox.Text)
 end)
 
 task.delay(1.5, function()
-pcall(function()
-for i = 1, 10 do
-fullLoadingFrame.BackgroundTransparency = 0.4 + (i * 0.06)
-mainLoadLabel.TextTransparency = i * 0.1
-subLoadLabel.TextTransparency = i * 0.1
-task.wait(0.02)
-end
-end)
-fullLoadingFrame:Destroy()
-frame.Visible = _T
-toggleBtn.Visible = _T
-toggleBtn.Text = "단어장 OFF"
-toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
+    pcall(function()
+        for i = 1, 10 do
+            fullLoadingFrame.BackgroundTransparency = 0.4 + (i * 0.06)
+            mainLoadLabel.TextTransparency = i * 0.1
+            subLoadLabel.TextTransparency = i * 0.1
+            task.wait(0.02)
+        end
+    end)
+    fullLoadingFrame:Destroy()
+    frame.Visible = _T
+    toggleBtn.Visible = _T
+    toggleBtn.Text = "단어장 OFF"
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
 end)
 
+-- =======================================================================
+-- [인게임 제시어 패킷 파서 및 관전 스레드 옵저버]
+-- =======================================================================
 local _lt = ""
 local function findSpectatorLabel()
-local pGui = _lp:FindFirstChildOfClass("PlayerGui")
-if not pGui then return nil end
-for _, v in ipairs(pGui:GetDescendants()) do
-if v:IsA("TextLabel") and (v.Name == "SpectatorTipLabel" or v.Text:find("시작하는")) then
-return v
-end
-end
-return nil
+    local pGui = _lp:FindFirstChildOfClass("PlayerGui")
+    if not pGui then return nil end
+    for _, v in ipairs(pGui:GetDescendants()) do
+        if v:IsA("TextLabel") and (v.Name == "SpectatorTipLabel" or v.Text:find("시작하는")) then
+            return v
+        end
+    end
+    return nil
 end
 
 local function findTurnTime()
-local pGui = _lp:FindFirstChildOfClass("PlayerGui")
-if not pGui then return "" end
-for _, v in ipairs(pGui:GetDescendants()) do
-if v:IsA("TextLabel") and v.Name == "TimeLabel" then
-return v.Text
-end
-end
-return ""
+    local pGui = _lp:FindFirstChildOfClass("PlayerGui")
+    if not pGui then return "" end
+    for _, v in ipairs(pGui:GetDescendants()) do
+        if v:IsA("TextLabel") and v.Name == "TimeLabel" then
+            return v.Text
+        end
+    end
+    return ""
 end
 
 local function getStartingLetter(gameDataInstance)
-if not gameDataInstance then return "" end
-local letter = gameDataInstance:GetAttribute("StartingLetter") or gameDataInstance:GetAttribute("Letter")
-if not letter or letter == "" then
-local label = findSpectatorLabel()
-if label then
-letter = string.match(label.Text, "'(.-)'") or string.match(label.Text, '"(.-)"')
-end
-end
-return letter or ""
+    if not gameDataInstance then return "" end
+    local letter = gameDataInstance:GetAttribute("StartingLetter") or gameDataInstance:GetAttribute("Letter")
+    if not letter or letter == "" then
+        local label = findSpectatorLabel()
+        if label then
+            letter = string.match(label.Text, "'(.-)'") or string.match(label.Text, '"(.-)"')
+        end
+    end
+    return letter or ""
 end
 
 local function onMyTurn(letter)
-if not botAiActive or not isUserPremium then return end
-local cleanLetter = tostring(letter or ""):match("^%s*(.-)%s*$")
-if cleanLetter == "" then return end
-task.spawn(function()
-local myToken = turnToken
-local delaySec = tonumber(gameDataInstance and gameDataInstance:GetAttribute("BotDelay") or 0) or math.random(1.2, 2.5)
-task.wait(delaySec)
-if myToken ~= turnToken or not isMyTurn() then return end
-local bestWord = selectBestWordAi(cleanLetter)
-local activeBox = findGameTextBox()
-if bestWord and activeBox then
-sendWordToGame(bestWord, activeBox)
-end
-end)
+    if not botAiActive or not isUserPremium then return end
+    local cleanLetter = tostring(letter or ""):match("^%s*(.-)%s*$")
+    if cleanLetter == "" then return end
+    task.spawn(function()
+        local myToken = turnToken
+        local delaySec = math.random(1.2, 2.5)
+        task.wait(delaySec)
+        if myToken ~= turnToken or not isMyTurn() then return end
+        
+        local bestWord = selectBestWordAi(cleanLetter)
+        local activeBox = findGameTextBox()
+        if bestWord and activeBox then
+            sendWordToGame(bestWord, activeBox)
+        end
+    end)
 end
 
--- 첫 번째 코드의 CurrentTurnPlayer 변경 감지 로직 통합
-if gd then
-connectValueOrAttributeChanged(gd, "CurrentTurnPlayer", function()
-ROUND_OBS.observeTyping(gd, "turn handoff")
-ROUND_OBS.commit("turn changed")
-local cur = getCurrentTurnPlayer(gd)
+-- =======================================================================
+-- [이미지 업로드 스크린샷 1153~1195행 실시간 턴 감지 로직부 동화]
+-- =======================================================================
+local function hookGameDataEvents(gd)
+    if not gd then return end
+    
+    -- 속성 및 값 변경 이벤트 핸들러 바인딩
+    local function onCurrentTurnPlayerChanged()
+        -- 턴 토큰을 증가시켜 이전 턴에 돌던 비동기 타스크(딜레이 스레드)를 무효화
+        local cur = gd:GetAttribute("CurrentTurnPlayer") or (gd:FindFirstChild("CurrentTurnPlayer") and gd.CurrentTurnPlayer.Value)
+        
+        -- [연동] 새로운 사람에게 턴이 넘어갔으므로 매 라운드 첫 턴 검증 리셋
+        local startingLetter = getStartingLetter(gd)
+        FirstTurnManager.resetToFirstTurn(startingLetter)
+        
+        if cur and cur ~= _lp.Name then
+            turnToken = turnToken + 1
+        end
+        
+        if cur and cur == _lp.Name then
+            onMyTurn(startingLetter)
+        else
+            if frame.Visible then
+                title.Text = " 대기 중... [상대방 턴: " .. tostring(cur or "?") .. "]"
+            end
+        end
+    end
+    
+    pcall(function()
+        gd:GetAttributeChangedSignal("CurrentTurnPlayer"):Connect(onCurrentTurnPlayerChanged)
+        if gd:FindFirstChild("CurrentTurnPlayer") then
+            gd.CurrentTurnPlayer.Changed:Connect(onCurrentTurnPlayerChanged)
+        end
+    end)
+end
+
+if currentGD then
+    hookGameDataEvents(currentGD)
+end
 
 -- 턴 토큰을 증가시켜 이전 턴에 돌던 비동기 타스크(딜레이 스레드)를 무효화
-if not isLocalPlayerValue(cur) then
-turnToken = turnToken + 1
+if not isMyTurn() then
+    turnToken = turnToken + 1
 end
-markRoundStarted(gd, "turn changed")
 
 -- 현재 턴 플레이어가 나(로컬 플레이어)인지 확인
-if isLocalPlayerValue(cur) then
-onMyTurn(getStartingLetter(gd)) -- 내 턴일 때 실행할 함수 호출
+if isMyTurn() then
+    onMyTurn(getStartingLetter(currentGD)) -- 내 턴일 때 실행할 함수 호출
 else
-guiSet("turn", " W:" .. tostring(playerNameFromValue(cur) or "?")) -- 상대방 턴이면 대기 상태 표시
-end
-end)
+    if frame.Visible then
+        title.Text = " 탐색 중..."
+    end
 end
 
 -- 관전(Spectator) 라벨이나 텍스트 변화를 감지하는 예비 루프 스레드 유지
 task.spawn(function()
-while task.wait(0.15) do
-local targetLabel = findSpectatorLabel()
-local currentTime = findTurnTime()
+    while task.wait(0.15) do
+        local targetLabel = findSpectatorLabel()
+        local currentTime = findTurnTime()
 
-if not targetLabel then
-if frame.Visible then title.Text = " 탐색 중..." .. currentTime end
-continue
-end
+        if not targetLabel then
+            if frame.Visible then title.Text = " 탐색 중..." .. currentTime end
+            continue
+        end
 
-local text = targetLabel.Text
-local ch = ""
-pcall(function() ch = string.match(text, "'(.-)'") or string.match(text, '"(.-)"') end)
+        local text = targetLabel.Text
+        local ch = ""
+        pcall(function() ch = string.match(text, "'(.-)'") or string.match(text, '"(.-)"') end)
 
-if ch and ch ~= "" and ch ~= _lt then
-_lt = ch
-if frame.Visible then
-title.Text = " 제시어 변경 감지: [" .. _lt .. "] (" .. #WordDB .. "개)"
-end
-searchBox.Text = _lt
-updateView(_lt)
-if isMyTurn() then
-onMyTurn(_lt)
-end
-end
-end
+        if ch and ch ~= "" and ch ~= _lt then
+            _lt = ch
+            if frame.Visible then
+                title.Text = " 제시어 변경 감지: [" .. _lt .. "] (" .. #WordDB .. "개)"
+            end
+            searchBox.Text = _lt
+            updateView(_lt)
+            if isMyTurn() then
+                onMyTurn(_lt)
+            end
+        end
+    end
 end)
-
