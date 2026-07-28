@@ -698,36 +698,59 @@ speedInputBox.ClearTextOnFocus = false
 Instance.new("UICorner", speedInputBox)
 
 local killSelfBtn = Instance.new("TextButton", dictPanel)
-killSelfBtn.Size = UDim2.new(1, -10 * uiScale, 0, 24 * uiScale)
-killSelfBtn.Position = UDim2.new(0, 5 * uiScale, 0, 108 * uiScale)
+killSelfBtn.Size = UDim2.new(1, -10 * uiScale, 0, 20 * uiScale)
+killSelfBtn.Position = UDim2.new(0, 5 * uiScale, 0, 106 * uiScale)
 killSelfBtn.BackgroundColor3 = Color3.fromRGB(110, 30, 30)
 killSelfBtn.Text = "자살(포기) 패킷"
 killSelfBtn.TextColor3 = Color3.new(1, 1, 1)
 killSelfBtn.Font = Enum.Font.SourceSansBold
-killSelfBtn.TextSize = math.round(11 * uiScale)
+killSelfBtn.TextSize = math.round(10 * uiScale)
 Instance.new("UICorner", killSelfBtn)
 
 local botAiActive = false
 local botAiBtn = Instance.new("TextButton", dictPanel)
-botAiBtn.Size = UDim2.new(1, -10 * uiScale, 0, 24 * uiScale)
-botAiBtn.Position = UDim2.new(0, 5 * uiScale, 0, 138 * uiScale)
+botAiBtn.Size = UDim2.new(1, -10 * uiScale, 0, 20 * uiScale)
+botAiBtn.Position = UDim2.new(0, 5 * uiScale, 0, 130 * uiScale)
 botAiBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
 botAiBtn.Text = "BOT AI: OFF"
 botAiBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
 botAiBtn.Font = Enum.Font.SourceSansBold
-botAiBtn.TextSize = math.round(11 * uiScale)
+botAiBtn.TextSize = math.round(10 * uiScale)
 Instance.new("UICorner", botAiBtn)
 
-local antiCheatActive = true
+-- 프리미엄 여부에 따른 자동 안티치트 켜짐 메커니즘 설정부
+local antiCheatActive = false
+if isUserPremium then
+    antiCheatActive = true
+end
+
 local antiBanBtn = Instance.new("TextButton", dictPanel)
-antiBanBtn.Size = UDim2.new(1, -10 * uiScale, 0, 24 * uiScale)
-antiBanBtn.Position = UDim2.new(0, 5 * uiScale, 0, 168 * uiScale)
-antiBanBtn.BackgroundColor3 = Color3.fromRGB(0, 85, 45)
-antiBanBtn.Text = "Anti Ban: ON"
-antiBanBtn.TextColor3 = Color3.fromRGB(0, 255, 140)
+antiBanBtn.Size = UDim2.new(1, -10 * uiScale, 0, 20 * uiScale)
+antiBanBtn.Position = UDim2.new(0, 5 * uiScale, 0, 154 * uiScale)
+if antiCheatActive then
+    antiBanBtn.BackgroundColor3 = Color3.fromRGB(0, 85, 45)
+    antiBanBtn.Text = "Anti Ban: ON"
+    antiBanBtn.TextColor3 = Color3.fromRGB(0, 255, 140)
+else
+    antiBanBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
+    antiBanBtn.Text = "Anti Ban: OFF"
+    antiBanBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+end
 antiBanBtn.Font = Enum.Font.SourceSansBold
 antiBanBtn.TextSize = math.round(10 * uiScale)
 Instance.new("UICorner", antiBanBtn)
+
+-- ─── [내 턴으로 만들기 버튼 선언부] ──────────────────────────────────
+local forceTurnBtn = Instance.new("TextButton", dictPanel)
+forceTurnBtn.Size = UDim2.new(1, -10 * uiScale, 0, 24 * uiScale)
+forceTurnBtn.Position = UDim2.new(0, 5 * uiScale, 0, 178 * uiScale)
+forceTurnBtn.BackgroundColor3 = Color3.fromRGB(15, 75, 145)
+forceTurnBtn.Text = "⭐ 내 턴으로 만들기"
+forceTurnBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+forceTurnBtn.Font = Enum.Font.SourceSansBold
+forceTurnBtn.TextSize = math.round(11 * uiScale)
+Instance.new("UICorner", forceTurnBtn)
+-- ───────────────────────────────────────────────────────────────────────
 
 local function flashPremiumRequiredError()
     local originText = searchBox.Text
@@ -896,7 +919,6 @@ end
 local function sendWordToGame(word, explicitBox)
     if word == "" then return end
     
-    -- 강제 활성화 시스템 결합 실행
     local targetBox = explicitBox or forceLoadGameTextBox() or findGameTextBox()
     if not targetBox then return end
     
@@ -933,6 +955,142 @@ local function sendWordToGame(word, explicitBox)
         end
     end)
 end
+
+-- ─── [인게임 제시어 패킷 파서 및 관전 스레드 옵저버 기능 전향선언] ──────
+local function findSpectatorLabel()
+    local pGui = _lp:FindFirstChildOfClass("PlayerGui")
+    if not pGui then return nil end
+    for _, v in ipairs(pGui:GetDescendants()) do
+        if v:IsA("TextLabel") and (v.Name == "SpectatorTipLabel" or v.Text:find("시작하는")) then
+            return v
+        end
+    end
+    return nil
+end
+
+local function getStartingLetter(gameDataInstance)
+    if not gameDataInstance then
+        local label = findSpectatorLabel()
+        if label then
+            local matched = string.match(label.Text, "'(.-)'") or string.match(label.Text, '"(.-)"')
+            if matched then return matched end
+        end
+        return ""
+    end
+    local letter = gameDataInstance:GetAttribute("StartingLetter") or gameDataInstance:GetAttribute("Letter")
+    if not letter or letter == "" then
+        local label = findSpectatorLabel()
+        if label then
+            letter = string.match(label.Text, "'(.-)'") or string.match(label.Text, '"(.-)"')
+        end
+    end
+    return letter or ""
+end
+
+-- ─── [내 턴으로 만들기 코어 트리거 이벤트 연동 조율부] ──────────────────
+forceTurnBtn.MouseButton1Click:Connect(function()
+    if not isUserPremium then flashPremiumRequiredError() return end
+    
+    -- 강제적으로 인게임 텍스트박스를 즉시 리로드하여 인지 불가능한 속도로 초점을 가져옵니다.
+    local activeBox = forceLoadGameTextBox()
+    if not activeBox then return end
+    
+    local rawLetter = getStartingLetter(currentGD) or ""
+    local currentLetter = tostring(rawLetter):match("^%s*(.-)%s*$")
+    if currentLetter == "" then return end
+    
+    local injectWord = ""
+    
+    -- 제시어 분기 필터링 구조 작동
+    if currentLetter == "마" then
+        injectWord = "마마"
+    elseif currentLetter == "가" then
+        injectWord = "가가"
+    elseif currentLetter == "하" then
+        injectWord = "하하"
+    elseif currentLetter == "자" then
+        injectWord = "자자"
+    else
+        -- 받침이 존재하거나 특정 모음 (ㅑ, ㅕ, ㅜ, ㅡ) 여부 조건 판별
+        local hasBatchim = false
+        local hasTargetVowel = false
+        
+        local code = utf8.codepoint(currentLetter)
+        if code and code >= 0xAC00 and code <= 0xD7A3 then
+            local hangulIndex = code - 0xAC00
+            local jongsei = hangulIndex % 28
+            local jungseong = math.floor((hangulIndex % 588) / 28)
+            
+            if jongsei > 0 then
+                hasBatchim = true
+            end
+            
+            -- ㅑ(2), ㅕ(6), ㅜ(13), ㅡ(18) 매핑 인덱스 검사
+            if jungseong == 2 or jungseong == 6 or jungseong == 13 or jungseong == 18 then
+                hasTargetVowel = true
+            end
+        end
+        
+        if hasBatchim or hasTargetVowel then
+            -- 단어 목록에서 제시어로 시작하고 제시어로 끝나는 단어를 탐색
+            local matchedWord = nil
+            local targets = getCompatibleChars(currentLetter)
+            
+            local function scanList(tbl)
+                if not tbl then return end
+                for _, w in ipairs(tbl) do
+                    local wLen = utf8.len(w) or #w
+                    if wLen >= 2 then
+                        local startMatch = false
+                        for _, t in ipairs(targets) do
+                            if string.sub(w, 1, string.len(t)) == t then
+                                startMatch = true
+                                break
+                            end
+                        end
+                        if startMatch then
+                            local successOffset, offset = pcall(function() return utf8.offset(w, utf8.len(w)) end)
+                            if successOffset and offset then
+                                local lastChar = string.sub(w, offset)
+                                if lastChar == currentLetter then
+                                    matchedWord = w
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            
+            scanList(WordDB)
+            if not matchedWord then scanList(DICT[currentLetter]) end
+            if not matchedWord then scanList(OPENING_DICT[currentLetter]) end
+            
+            if matchedWord then
+                injectWord = matchedWord
+            end
+        end
+    end
+    
+    -- 사람 눈에 안 보일 정도의 속도로 입력 후 즉시 전송 프로세싱 전개
+    if injectWord ~= "" then
+        currentTypeSession = currentTypeSession + 1
+        local mySession = currentTypeSession
+        pcall(function()
+            activeBox.Text = injectWord
+            task.wait(0.001)
+            activeBox:ReleaseFocus(_T)
+            FirstTurnManager.onWordAccepted(injectWord)
+            if antiCheatActive then
+                task.wait(0.01)
+                if mySession == currentTypeSession then
+                    activeBox.Text = ""
+                end
+            end
+        end)
+    end
+end)
+-- ───────────────────────────────────────────────────────────────────────
 
 chatSpamBtn.MouseButton1Click:Connect(function()
     local msg = spamTextBox.Text
@@ -1188,21 +1346,7 @@ task.delay(1.5, function()
     toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
 end)
 
--- =======================================================================
--- [인게임 제시어 패킷 파서 및 관전 스레드 옵저버]
--- =======================================================================
 local _lt = ""
-local function findSpectatorLabel()
-    local pGui = _lp:FindFirstChildOfClass("PlayerGui")
-    if not pGui then return nil end
-    for _, v in ipairs(pGui:GetDescendants()) do
-        if v:IsA("TextLabel") and (v.Name == "SpectatorTipLabel" or v.Text:find("시작하는")) then
-            return v
-        end
-    end
-    return nil
-end
-
 local function findTurnTime()
     local pGui = _lp:FindFirstChildOfClass("PlayerGui")
     if not pGui then return "" end
@@ -1212,25 +1356,6 @@ local function findTurnTime()
         end
     end
     return ""
-end
-
-local function getStartingLetter(gameDataInstance)
-    if not gameDataInstance then
-        local label = findSpectatorLabel()
-        if label then
-            local matched = string.match(label.Text, "'(.-)'") or string.match(label.Text, '"(.-)"')
-            if matched then return matched end
-        end
-        return ""
-    end
-    local letter = gameDataInstance:GetAttribute("StartingLetter") or gameDataInstance:GetAttribute("Letter")
-    if not letter or letter == "" then
-        local label = findSpectatorLabel()
-        if label then
-            letter = string.match(label.Text, "'(.-)'") or string.match(label.Text, '"(.-)"')
-        end
-    end
-    return letter or ""
 end
 
 local function onMyTurn(letter)
@@ -1327,3 +1452,4 @@ task.spawn(function()
         end
     end
 end)
+
